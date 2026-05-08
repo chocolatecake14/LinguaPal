@@ -1,4 +1,4 @@
-LinguaPal
+\# README
 
 An NVDA add-on for seamless language translation and conversation with AI.
 
@@ -6,47 +6,47 @@ LinguaPal is designed to bridge language barriers for screen reader users by pro
 
 Features
 
-• 
+•
 
 Real-time Translation: Translate selected text with a simple keystroke.
 
-• 
+•
 
 Talk to your favourit AI models in real-time.
 
-• 
+•
 
 Customizable Settings: Choose your target language and preferred translation engine through the NVDA settings menu.
 
-• 
+•
 
 Multilingual Support: Works with various languages supported by modern translation APIs.
 
 Installation
 
-1\. 
+1\.
 
 Download the latest .nvda-addon file from the Releases page.
 
-2\. 
+2\.
 
 Open the file; NVDA will prompt you to install the add-on.
 
-3\. 
+3\.
 
 Restart NVDA.
 
 Usage
 
-• 
+•
 
 NVDA + Alt + C: Translate the currently selected text.
 
-• 
+•
 
 NVDA + Alt + G: Open Chat dialog with your selected AI model.
 
-• 
+•
 
 NVDA + Control + Alt + S: Open LinguaPal settings.
 
@@ -54,11 +54,11 @@ NVDA + Control + Alt + S: Open LinguaPal settings.
 
 Requirements
 
-• 
+•
 
 NVDA 2023.1 or later.
 
-• 
+•
 
 An active internet connection.
 
