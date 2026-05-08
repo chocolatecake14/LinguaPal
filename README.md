@@ -1,4 +1,4 @@
-\# README
+\# LinguaPal
 
 An NVDA add-on for seamless language translation and conversation with AI.
 
