@@ -1,5 +1,7 @@
 \# LinguaPal
 
+
+
 An NVDA add-on for seamless language translation and conversation with AI.
 
 LinguaPal is designed to bridge language barriers for screen reader users by providing quick and easy translation tools directly within the NVDA environment. Whether you are browsing the web or reading documents in a foreign language, LinguaPal helps make the content accessible in your preferred language, as well as let's you talk to AI (Gemini / Groq) for real-time conversations, suggestions and queries.
