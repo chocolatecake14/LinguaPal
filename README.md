@@ -61,4 +61,4 @@ Contributions are welcome! If you find a bug or have a suggestion for a new feat
 If you wish to contact me, do so on Telegram: [@MalikAli01](https://t.me/MalikAli01)
 
 ## License
-Distributed under the GNU General Public License v3.0.
+Distributed under the GNU General Public License v2.0.
