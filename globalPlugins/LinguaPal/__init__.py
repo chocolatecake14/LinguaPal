@@ -16,7 +16,7 @@ import threading
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "0.1.5"
+ADDON_VERSION = "0.1.6"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json" 
 roleSECTION = "LinguaPal"
 
