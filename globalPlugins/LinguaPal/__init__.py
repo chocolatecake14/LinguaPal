@@ -17,7 +17,7 @@ import threading
 addonHandler.initTranslation()
 
 ADDON_VERSION = "0.1.5"
-UPDATE_CHECK_URL = "https://baddobaddi.ddns.net/linguapal/update.json" 
+UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json" 
 roleSECTION = "LinguaPal"
 
 confspec = {
@@ -38,7 +38,7 @@ def sendGeminiSinglePrompt(promptText: str):
     data = {"contents": [{"role": "user", "parts": [{"text": promptText}]}]}
     try:
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={apiGemini}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={apiGemini}",
             headers=headers, json=data)
         r = response.json()
         if response.status_code != 200:
@@ -64,7 +64,7 @@ def sendGeminiChat(messages):
     data = {"contents": gemini_messages}
     try:
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={apiGemini}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={apiGemini}",
             headers=headers, json=data)
         r = response.json()
         if response.status_code != 200:
