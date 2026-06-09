@@ -16,7 +16,7 @@ import threading
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "0.1.6"
+ADDON_VERSION = "0.1.7"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json" 
 roleSECTION = "LinguaPal"
 
@@ -54,8 +54,6 @@ def sendGeminiChat(messages):
     if not apiGemini:
         return "Gemini API key not set. Please go to add-on settings and enter your key."
     headers = {'Content-Type': 'application/json'}
-    # Internal: [{"role": "user"|"model", "text": "..."}]
-    # Gemini: [{"role": "user"|"model", "parts": [{"text": "..."}]}]
     gemini_messages = []
     for msg in messages:
         role = msg["role"]
@@ -183,18 +181,54 @@ def checkForUpdates(showMessages=True):
                 wx.CallAfter(ui.message, "Error checking for updates: " + str(e))
     threading.Thread(target=worker, daemon=True).start()
 
+class MessageViewerDialog(wx.Dialog):
+    def __init__(self, parent, text):
+        super().__init__(parent, -1, title=_("Full Message"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.text = text
+        self.initUI()
+
+    def initUI(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self.textBox = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)
+        self.textBox.SetValue(self.text)
+        self.textBox.SetName(_("Message content"))
+        sizer.Add(self.textBox, 1, flag=wx.EXPAND | wx.ALL, border=10)
+        
+        btn = wx.Button(self, id=wx.ID_OK, label=_("&Close"))
+        sizer.Add(btn, 0, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+        
+        self.SetSizer(sizer)
+        self.SetMinSize((400, 300))
+        self.SetSize((600, 450))
+        self.CenterOnParent()
+        
+        self.Bind(wx.EVT_CHAR_HOOK, self.onKey)
+        self.textBox.SetFocus()
+
+    def onKey(self, event):
+        k = event.GetKeyCode()
+        if k == wx.WXK_ESCAPE:
+            self.EndModal(wx.ID_OK)
+        else:
+            event.Skip()
+
 class GeminiChatDialog(wx.Dialog):
     def __init__(self):
-        super().__init__(None, -1, title=_("Chat with LinguaPal"))
+        model = config.conf[roleSECTION].get("model", "groq").capitalize()
+        title = f"{_('Chat with LinguaPal')} - {model}"
+        super().__init__(None, -1, title=title)
         self.chat_history = []
+        self.full_messages = []
         self.initUI()
 
     def initUI(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
         label1 = wx.StaticText(self, label=_("Message &history:"))
         sizer.Add(label1, 0, flag=wx.LEFT | wx.RIGHT | wx.TOP, border=10)
-        self.historyBox = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)
+        self.historyBox = wx.ListBox(self, style=wx.LB_SINGLE)
         self.historyBox.SetName(_("Message history"))
+        self.historyBox.Bind(wx.EVT_LISTBOX_DCLICK, self.onDoubleClick)
         sizer.Add(self.historyBox, 3, flag=wx.EXPAND | wx.ALL, border=10)
         
         label2 = wx.StaticText(self, label=_("Type your &message:"))
@@ -216,7 +250,25 @@ class GeminiChatDialog(wx.Dialog):
         k = event.GetKeyCode()
         if k == wx.WXK_ESCAPE:
             self.Destroy()
+            return
+        elif k in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            focus_win = wx.Window.FindFocus()
+            if focus_win == self.historyBox:
+                self.showFullMessage()
+                return
         event.Skip()
+
+    def onDoubleClick(self, event):
+        self.showFullMessage()
+
+    def showFullMessage(self):
+        selection = self.historyBox.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+        full_text = self.full_messages[selection]
+        dlg = MessageViewerDialog(self, full_text)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def onSend(self, event):
         user_message = self.inputBox.GetValue().strip()
@@ -231,11 +283,18 @@ class GeminiChatDialog(wx.Dialog):
 
     def appendToChat(self, speaker, message):
         clean_message = re.sub(r'\n\s*\n+', '\n', message.strip())
-        current = self.historyBox.GetValue().strip()
-        new_text = f"{speaker}: {clean_message}"
-        combined = f"{current}\n{new_text}" if current else new_text
-        self.historyBox.SetValue(combined.strip())
-        self.historyBox.ShowPosition(self.historyBox.GetLastPosition())
+        full_text = f"{speaker}: {clean_message}"
+        self.full_messages.append(full_text)
+        
+        display_text = full_text
+        if len(display_text) > 1500:
+            display_text = display_text[:1500] + _("... [Press Enter to read full message]")
+            
+        self.historyBox.Append(display_text)
+        
+        count = self.historyBox.GetCount()
+        if count > 0:
+            self.historyBox.SetSelection(count - 1)
 
     def getResponse(self):
         def worker():
