@@ -1,10 +1,7 @@
 {
   "version": "0.1.7",
-  "changelog": "Updated AI chat dialog, now containing a list view instead of read-only edit field, allowing users to navigate messages with up / down arrows.
-  If you still wish to read a message in edit field, you can do so by pressing enter on the message.
-  If a message is longer than 1500 characters, it will also be split for easier reading and the full message can be viewed by pressing enter on it.
-  The chat window title now shows the currently selected AI model.
-  Some other improvements under the hood.",
+  "changelog": "Updated AI chat dialog, now containing a list view instead of read-only edit field, allowing users to navigate messages with up / down arrows.\nIf you still wish to read a message in edit field, you can do so by pressing enter on the message.\nIf a message is longer than 1500 characters, it will also be split for easier reading and the full message can be viewed by pressing enter on it.
+\nThe chat window title now shows the currently selected AI model.\nSome other improvements under the hood.",
   "downloadUrl": "https://github.com/chocolatecake14/LinguaPal/releases/download/0.1.7/LinguaPal-0.1.7.nvda-addon"
 }
-    
+   
