@@ -13,10 +13,12 @@ import webbrowser
 from scriptHandler import script
 import addonHandler
 import threading
+import json
+import tones
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "0.1.7"
+ADDON_VERSION = "0.1.8"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json" 
 roleSECTION = "LinguaPal"
 
@@ -25,68 +27,101 @@ confspec = {
     "apiKey": "string(default=)", 
     "geminiApiKey": "string(default=)", 
     "model": "string(default=groq)", 
-    "checkUpdatesAtStartup": "boolean(default=True)"
+    "geminiModel": "string(default=gemini-3.5-flash)",
+    "groqModel": "string(default=llama-3.3-70b-versatile)",
+    "systemPrompt": "string(default=You are a helpful AI assistant.)",
+    "checkUpdatesAtStartup": "boolean(default=True)",
+    "geminiModelCache": "string(default=)",
+    "groqModelCache": "string(default=)"
 }
 config.conf.spec[roleSECTION] = confspec
 MAX_CHAT_HISTORY = 50
 
-def sendGeminiSinglePrompt(promptText: str):
+def _call_gemini_api(data: dict, stream=False):
     apiGemini = config.conf[roleSECTION]["geminiApiKey"]
+    geminiModel = config.conf[roleSECTION].get("geminiModel", "gemini-3.7-flash")
     if not apiGemini:
-        return "Gemini API key not set. Please go to add-on settings and enter your key."
+        raise Exception(_("Gemini API key not set. Please go to add-on settings and enter your key."))
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"role": "user", "parts": [{"text": promptText}]}]}
+    
+    endpoint = f"streamGenerateContent?alt=sse&key={apiGemini}" if stream else f"generateContent?key={apiGemini}"
     try:
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={apiGemini}",
-            headers=headers, json=data)
-        r = response.json()
+            f"https://generativelanguage.googleapis.com/v1beta/models/{geminiModel}:{endpoint}",
+            headers=headers, json=data, timeout=30, stream=stream)
+            
         if response.status_code != 200:
-            return f"Gemini error {response.status_code}: {r.get('error', {}).get('message', 'Unknown error')}"
-        if "candidates" not in r:
-            return "Gemini error: No candidates found. Full response: " + str(r)
-        return r['candidates'][0]['content']['parts'][0]['text']
+            try:
+                r = response.json()
+                error_msg = r.get('error', {}).get('message', str(r))
+            except:
+                error_msg = f"Received non-JSON response: {response.text[:100]}"
+            raise Exception(f"Gemini error {response.status_code}: {error_msg}")
+            
+        if stream:
+            def generate():
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith("data: "):
+                            try:
+                                chunk = json.loads(line[6:])
+                                if "candidates" in chunk and len(chunk["candidates"]) > 0:
+                                    parts = chunk["candidates"][0]["content"]["parts"]
+                                    if len(parts) > 0 and "text" in parts[0]:
+                                        yield parts[0]["text"]
+                            except:
+                                pass
+            return generate()
+        else:
+            try:
+                r = response.json()
+            except Exception:
+                raise Exception(f"Gemini error {response.status_code}: Received non-JSON response.")
+            if "candidates" not in r:
+                raise Exception("Gemini error: No candidates found. Full response: " + str(r))
+            return r['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        return "Gemini exception: " + str(e)
+        raise Exception(str(e))
 
-def sendGeminiChat(messages):
-    apiGemini = config.conf[roleSECTION]["geminiApiKey"]
-    if not apiGemini:
-        return "Gemini API key not set. Please go to add-on settings and enter your key."
-    headers = {'Content-Type': 'application/json'}
+def sendGeminiSinglePrompt(promptText: str):
+    data = {"contents": [{"role": "user", "parts": [{"text": promptText}]}]}
+    return _call_gemini_api(data)
+
+def sendGeminiChat(messages, stream=False):
     gemini_messages = []
     for msg in messages:
         role = msg["role"]
         gemini_messages.append({"role": role, "parts": [{"text": msg["text"]}]})
-
-    data = {"contents": gemini_messages}
-    try:
-        response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={apiGemini}",
-            headers=headers, json=data)
-        r = response.json()
-        if response.status_code != 200:
-            return f"Gemini error {response.status_code}: {r.get('error', {}).get('message', 'Unknown error')}"
-        if "candidates" not in r:
-            return "Gemini error: No candidates found. Full response: " + str(r)
-        return r['candidates'][0]['content']['parts'][0]['text']
-    except Exception as e:
-        return "Gemini exception: " + str(e)
-
-def sendGroqRequest(messages: list):
-    apiKey = config.conf[roleSECTION]["apiKey"]
-    if not apiKey:
-        return "Groq API key not set. Please go to add-on settings and enter your key."
     
+    data = {"contents": gemini_messages}
+    sys_prompt = config.conf[roleSECTION].get("systemPrompt", "").strip()
+    if sys_prompt:
+        data["system_instruction"] = {"parts": [{"text": sys_prompt}]}
+        
+    return _call_gemini_api(data, stream=stream)
+
+def sendGroqRequest(messages: list, stream=False, use_system_prompt=True):
+    apiKey = config.conf[roleSECTION]["apiKey"]
+    groqModel = config.conf[roleSECTION].get("groqModel", "llama-3.3-70b-versatile")
+    if not apiKey:
+        raise Exception(_("Groq API key not set. Please go to add-on settings and enter your key."))
+    
+    if use_system_prompt:
+        sys_prompt = config.conf[roleSECTION].get("systemPrompt", "").strip()
+        if sys_prompt:
+            messages = [{"role": "system", "content": sys_prompt}] + messages
+        
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {apiKey}'
     }
     
     data = {
-        "model": "llama-3.3-70b-versatile", 
+        "model": groqModel, 
         "messages": messages,
-        "temperature": 0.7
+        "temperature": 0.7,
+        "stream": stream
     }
     
     try:
@@ -94,28 +129,46 @@ def sendGroqRequest(messages: list):
             "https://api.groq.com/openai/v1/chat/completions",
             headers=headers, 
             json=data,
-            timeout=30
+            timeout=30,
+            stream=stream
         )
         
-        try:
-            r = response.json()
-        except Exception:
-            return f"Groq error {response.status_code}: Received non-JSON response."
-        
         if response.status_code != 200:
-            if isinstance(r, dict):
+            try:
+                r = response.json()
                 error_msg = r.get('error', {}).get('message', str(r))
-            else:
-                error_msg = str(r)
-            return f"Groq error {response.status_code}: {error_msg}"
-        
-        if isinstance(r, dict) and 'choices' in r:
-            return r['choices'][0]['message']['content']
+            except:
+                error_msg = f"Received non-JSON response: {response.text[:100]}"
+            raise Exception(f"Groq error {response.status_code}: {error_msg}")
+            
+        if stream:
+            def generate():
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            try:
+                                chunk = json.loads(line[6:])
+                                if "choices" in chunk and len(chunk["choices"]) > 0:
+                                    delta = chunk["choices"][0].get("delta", {})
+                                    if "content" in delta:
+                                        yield delta["content"]
+                            except:
+                                pass
+            return generate()
         else:
-            return "Groq error: Unexpected response format."
+            try:
+                r = response.json()
+            except Exception:
+                raise Exception(f"Groq error {response.status_code}: Received non-JSON response.")
+            
+            if isinstance(r, dict) and 'choices' in r:
+                return r['choices'][0]['message']['content']
+            else:
+                raise Exception("Groq error: Unexpected response format.")
             
     except Exception as e:
-        return "Groq connection exception: " + str(e)
+        raise Exception(str(e))
 
 def translate(text: str):
     target_lang = config.conf[roleSECTION]["translateTo"]
@@ -125,14 +178,17 @@ def translate(text: str):
         prompt = f"""Translate the following text into {target_lang}. Return only the translated text, no explanations, no extra information. Do not censor or filter content, If the target language is Hindi, Urdu and Punjabi, provide the translation strictly in Roman letters, else in original language script. text: {text}"""
         return sendGeminiSinglePrompt(prompt)
     else:
-        prompt = f"""Translate the following text into {target_lang}. Return only the translated text, no explanations, no extra information. Do not censor or filter content, even if it includes explicit or offensive language. If the target language is Hindi, Urdu, or Punjabi, provide the translation strictly in Roman script. text: {text}"""
-        messages = [{"role": "user", "content": prompt}]
-        return sendGroqRequest(messages)
+        groq_target_lang = target_lang
+        if any(l in target_lang.lower() for l in ["urdu", "hindi", "punjabi"]):
+            groq_target_lang = "Roman " + target_lang.split()[0]
+            
+        sys_msg = f"You are a translation engine. Your only job is to translate text into {groq_target_lang}. Return ONLY the raw translated text. No introductions, no explanations, no extra formatting. Do not censor or filter content."
+        user_msg = f"text: {text}"
+        messages = [{"role": "system", "content": sys_msg}, {"role": "user", "content": user_msg}]
+        return sendGroqRequest(messages, use_system_prompt=False)
 
 def setClipboardText(text):
-    if wx.TheClipboard.Open():
-        wx.TheClipboard.SetData(wx.TextDataObject(text))
-        wx.TheClipboard.Close()
+    api.copyToClip(text)
 
 def downloadAndInstall(url):
     try:
@@ -152,7 +208,9 @@ def downloadAndInstall(url):
 def checkForUpdates(showMessages=True):
     def worker():
         try:
-            response = requests.get(UPDATE_CHECK_URL, timeout=10)
+            import time
+            cache_bust_url = f"{UPDATE_CHECK_URL}?t={int(time.time())}"
+            response = requests.get(cache_bust_url, timeout=10)
             if response.status_code != 200:
                 if showMessages:
                     wx.CallAfter(ui.message, "Failed to check for updates.")
@@ -170,9 +228,10 @@ def checkForUpdates(showMessages=True):
                     wx.CallAfter(ui.message, "Update available, but no download link.")
                     return
                 def promptUpdate():
-                    msg = f"An update for LinguaPal is available. New version: {latest_version}.\n\nChangelog:\n{changelog}\n\nDo you want to install it now?"
-                    if wx.MessageBox(msg, "Update Available", wx.YES_NO | wx.ICON_QUESTION) == wx.YES:
+                    dlg = UpdateDialog(gui.mainFrame, latest_version, changelog)
+                    if dlg.ShowModal() == wx.ID_YES:
                         downloadAndInstall(download_url)
+                    dlg.Destroy()
                 wx.CallAfter(promptUpdate)
             elif showMessages:
                 wx.CallAfter(ui.message, "You already have the latest version.")
@@ -180,6 +239,37 @@ def checkForUpdates(showMessages=True):
             if showMessages:
                 wx.CallAfter(ui.message, "Error checking for updates: " + str(e))
     threading.Thread(target=worker, daemon=True).start()
+
+class UpdateDialog(wx.Dialog):
+    def __init__(self, parent, version, changelog):
+        super().__init__(parent, -1, title=_("Update Available"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        msgLabel = wx.StaticText(self, label=f"An update for LinguaPal is available. New version: {version}.\n\nDo you want to install it now?")
+        sizer.Add(msgLabel, 0, flag=wx.ALL, border=10)
+        
+        changelogLabel = wx.StaticText(self, label=_("Changelog:"))
+        sizer.Add(changelogLabel, 0, flag=wx.LEFT | wx.RIGHT, border=10)
+        
+        self.changelogBox = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH)
+        self.changelogBox.SetValue(changelog)
+        self.changelogBox.SetName(_("Changelog"))
+        sizer.Add(self.changelogBox, 1, flag=wx.EXPAND | wx.ALL, border=10)
+        
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.yesBtn = wx.Button(self, wx.ID_YES, label=_("&Yes"))
+        self.noBtn = wx.Button(self, wx.ID_NO, label=_("&No"))
+        self.yesBtn.Bind(wx.EVT_BUTTON, lambda evt: self.EndModal(wx.ID_YES))
+        self.noBtn.Bind(wx.EVT_BUTTON, lambda evt: self.EndModal(wx.ID_NO))
+        btnSizer.Add(self.yesBtn, 0, flag=wx.RIGHT, border=10)
+        btnSizer.Add(self.noBtn, 0)
+        
+        sizer.Add(btnSizer, 0, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+        
+        self.SetSizer(sizer)
+        self.SetMinSize((400, 300))
+        self.CenterOnParent()
 
 class MessageViewerDialog(wx.Dialog):
     def __init__(self, parent, text):
@@ -256,6 +346,12 @@ class GeminiChatDialog(wx.Dialog):
             if focus_win == self.historyBox:
                 self.showFullMessage()
                 return
+            elif focus_win == self.inputBox:
+                if event.ShiftDown():
+                    event.Skip()
+                else:
+                    self.onSend(None)
+                return
         event.Skip()
 
     def onDoubleClick(self, event):
@@ -301,25 +397,69 @@ class GeminiChatDialog(wx.Dialog):
             try:
                 model = config.conf[roleSECTION]["model"]
                 if model == "gemini":
-                    response = sendGeminiChat(self.chat_history)
+                    stream = sendGeminiChat(self.chat_history, stream=True)
                     ai_name = "Gemini"
                 else:
                     groq_messages = []
                     for msg in self.chat_history:
                         role = "assistant" if msg["role"] == "model" else msg["role"]
                         groq_messages.append({"role": role, "content": msg["text"]})
-                    response = sendGroqRequest(groq_messages)
+                    stream = sendGroqRequest(groq_messages, stream=True)
                     ai_name = "Groq"
+
+                full_response = ""
+                sentence_buffer = ""
+                
+                # Setup UI placeholder
+                def initUI():
+                    self.appendToChat(ai_name, "")
+                wx.CallAfter(initUI)
+                
+                # Speak AI name once
+                wx.CallAfter(ui.message, f"{ai_name}: ")
+
+                for chunk in stream:
+                    if not chunk: continue
+                    full_response += chunk
+                    sentence_buffer += chunk
+                    
+                    # update textctrl dynamically
+                    def updateText(curr_text):
+                        count = self.historyBox.GetCount()
+                        if count > 0:
+                            clean = re.sub(r'\n\s*\n+', '\n', curr_text.strip())
+                            display = f"{ai_name}: {clean}"
+                            self.full_messages[-1] = display
+                            if len(display) > 1500:
+                                display = display[:1500] + _("... [Press Enter to read full message]")
+                            self.historyBox.SetString(count - 1, display)
+                    wx.CallAfter(updateText, full_response)
+                    
+                    # Speak when sentence ends
+                    if any(p in sentence_buffer for p in ('.', '!', '?', '\n')):
+                        for p in ('.', '!', '?', '\n'):
+                            if p in sentence_buffer:
+                                parts = sentence_buffer.split(p, 1)
+                                to_speak = parts[0] + p
+                                sentence_buffer = parts[1] if len(parts) > 1 else ""
+                                if to_speak.strip():
+                                    wx.CallAfter(ui.message, to_speak.strip())
+                                break
+
+                if sentence_buffer.strip():
+                    wx.CallAfter(ui.message, sentence_buffer.strip())
+                    
+                self.chat_history.append({"role": "model", "text": full_response})
 
             except Exception as e:
                 response = _("Error: ") + str(e)
                 ai_name = "System"
-
-            def updateUI():
-                self.chat_history.append({"role": "model", "text": response})
-                self.appendToChat(ai_name, response)
-                ui.message(f"{ai_name}: " + response)
-            wx.CallAfter(updateUI)
+                def updateErrorUI():
+                    self.chat_history.append({"role": "model", "text": response})
+                    self.appendToChat(ai_name, response)
+                    ui.message(f"{ai_name}: " + response)
+                wx.CallAfter(updateErrorUI)
+                
         threading.Thread(target=worker, daemon=True).start()
 
 class LinguaPalSettingsPanel(SettingsPanel):
@@ -327,7 +467,7 @@ class LinguaPalSettingsPanel(SettingsPanel):
     def makeSettings(self, settingsSizer):
         sHelper = guiHelper.BoxSizerHelper(self, sizer=settingsSizer)
         
-        self.modelLabel = sHelper.addItem(wx.StaticText(self, label=_("Select Model")))
+        self.modelLabel = sHelper.addItem(wx.StaticText(self, label=_("Select AI Provider")))
         self.modelChoice = sHelper.addItem(wx.Choice(self, choices=["Groq", "Gemini"]))
         self.currentModel = config.conf[roleSECTION].get("model", "groq").lower()
         
@@ -343,6 +483,45 @@ class LinguaPalSettingsPanel(SettingsPanel):
         initialLabel = _("Groq API Key") if self.currentModel == "groq" else _("Gemini API Key")
         self.apiKeyLabel = sHelper.addItem(wx.StaticText(self, label=initialLabel))
         self.apiKeyField = sHelper.addItem(wx.TextCtrl(self, value=self.keys[self.currentModel], style=wx.TE_PASSWORD))
+
+        # Groq Models
+        self.groqModelLabel = sHelper.addItem(wx.StaticText(self, label=_("Groq Model")))
+        
+        cached_groq = config.conf[roleSECTION].get("groqModelCache", "")
+        if cached_groq:
+            groq_choices = cached_groq.split(",")
+        else:
+            groq_choices = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+            
+        saved_groq = config.conf[roleSECTION].get("groqModel", "llama-3.3-70b-versatile")
+        if saved_groq not in groq_choices:
+            groq_choices.append(saved_groq)
+            
+        self.groqModelChoice = sHelper.addItem(wx.Choice(self, choices=groq_choices))
+        self.groqModelChoice.SetStringSelection(saved_groq)
+
+        # Gemini Models
+        self.geminiModelLabel = sHelper.addItem(wx.StaticText(self, label=_("Gemini Model")))
+        
+        cached_gemini = config.conf[roleSECTION].get("geminiModelCache", "")
+        if cached_gemini:
+            gemini_choices = cached_gemini.split(",")
+        else:
+            gemini_choices = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+            
+        saved_gemini = config.conf[roleSECTION].get("geminiModel", "gemini-3.7-flash")
+        if saved_gemini not in gemini_choices:
+            gemini_choices.append(saved_gemini)
+            
+        self.geminiModelChoice = sHelper.addItem(wx.Choice(self, choices=gemini_choices))
+        self.geminiModelChoice.SetStringSelection(saved_gemini)
+
+        self.fetchModelsButton = sHelper.addItem(wx.Button(self, label=_("Fetch Available Models (Requires API Key)")))
+        self.fetchModelsButton.Bind(wx.EVT_BUTTON, self.onFetchModels)
+
+        # System Prompt
+        self.promptLabel = sHelper.addItem(wx.StaticText(self, label=_("System Prompt (Persona)")))
+        self.promptField = sHelper.addItem(wx.TextCtrl(self, value=config.conf[roleSECTION].get("systemPrompt", "You are a helpful AI assistant."), style=wx.TE_MULTILINE))
         
         languages = [
             "English United States", "German Germany", "Urdu Pakistan", "French France",
@@ -366,6 +545,52 @@ class LinguaPalSettingsPanel(SettingsPanel):
         self.updateButton = sHelper.addItem(wx.Button(self, label=_("Check for updates now")))
         self.updateButton.Bind(wx.EVT_BUTTON, lambda evt: checkForUpdates(showMessages=True))
 
+    def _updateChoices(self, choice_ctrl, new_choices):
+        current_selection = choice_ctrl.GetStringSelection()
+        choice_ctrl.SetItems(new_choices)
+        if current_selection and choice_ctrl.FindString(current_selection) != wx.NOT_FOUND:
+            choice_ctrl.SetStringSelection(current_selection)
+        elif new_choices:
+            choice_ctrl.SetSelection(0)
+
+    def onFetchModels(self, event):
+        def worker():
+            groqKey = self.apiKeyField.GetValue() if self.currentModel == "groq" else self.keys["groq"]
+            if groqKey:
+                try:
+                    r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {groqKey}"}, timeout=10)
+                    if r.status_code == 200:
+                        models = r.json().get("data", [])
+                        groq_names = []
+                        for m in models:
+                            mid = m["id"].lower()
+                            if any(x in mid for x in ["llama", "mixtral", "gemma", "qwen", "deepseek"]) and not any(x in mid for x in ["whisper", "embed", "vision", "audio", "image", "tts"]):
+                                groq_names.append(m["id"])
+                        config.conf[roleSECTION]["groqModelCache"] = ",".join(groq_names)
+                        wx.CallAfter(self._updateChoices, self.groqModelChoice, groq_names)
+                except Exception:
+                    pass
+            
+            geminiKey = self.apiKeyField.GetValue() if self.currentModel == "gemini" else self.keys["gemini"]
+            if geminiKey:
+                try:
+                    r = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={geminiKey}", timeout=10)
+                    if r.status_code == 200:
+                        models = r.json().get("models", [])
+                        gemini_names = []
+                        for m in models:
+                            if "generateContent" in m.get("supportedGenerationMethods", []):
+                                name = m["name"].replace("models/", "")
+                                nl = name.lower()
+                                if "gemini" in nl and not any(x in nl for x in ["embed", "aqa", "vision", "audio", "image", "tts", "learnlm", "2.5", "1.5", "1.0", "video", "robotics", "bison", "gecko", "omni", "customtool"]):
+                                    gemini_names.append(name)
+                        config.conf[roleSECTION]["geminiModelCache"] = ",".join(gemini_names)
+                        wx.CallAfter(self._updateChoices, self.geminiModelChoice, gemini_names)
+                except Exception:
+                    pass
+            wx.CallAfter(ui.message, _("Models refreshed successfully."))
+        threading.Thread(target=worker, daemon=True).start()
+
     def onModelChange(self, event):
         newModel = self.modelChoice.GetStringSelection().lower()
         if newModel == self.currentModel:
@@ -388,6 +613,11 @@ class LinguaPalSettingsPanel(SettingsPanel):
         config.conf[roleSECTION]["model"] = self.modelChoice.GetStringSelection().lower()
         config.conf[roleSECTION]["apiKey"] = self.keys["groq"]
         config.conf[roleSECTION]["geminiApiKey"] = self.keys["gemini"]
+        
+        config.conf[roleSECTION]["groqModel"] = self.groqModelChoice.GetStringSelection()
+        config.conf[roleSECTION]["geminiModel"] = self.geminiModelChoice.GetStringSelection()
+        config.conf[roleSECTION]["systemPrompt"] = self.promptField.GetValue()
+        
         config.conf[roleSECTION]["translateTo"] = self.langChoice.GetStringSelection()
         config.conf[roleSECTION]["checkUpdatesAtStartup"] = self.updateCheckBox.GetValue()
 
@@ -403,21 +633,29 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     @script(gesture="kb:NVDA+Alt+c", description=_("Translates clipboard text using the currently selected AI model"))
     def script_translateClipboard(self, gesture):
-        def doTranslation():
+        try:
+            clip = api.getClipData()
+        except Exception:
+            clip = None
+            
+        if not clip:
+            wx.CallAfter(ui.message, _("Clipboard is empty"))
+            return
+            
+        def doTranslation(text_to_translate):
             try:
-                clip = api.getClipData()
-                if not clip:
-                    wx.CallAfter(ui.message, "Clipboard is empty")
-                    return
-                result = translate(clip)
-                if result.lower().startswith("error") or "error" in result.lower() and ("gemini" in result.lower() or "groq" in result.lower()):
-                    wx.CallAfter(ui.message, "Translation failed: " + result[:100])
-                else:
-                    wx.CallAfter(setClipboardText, result)
-                    wx.CallAfter(ui.message, result)
+                tones.beep(440, 50)
+                tones.beep(880, 50)
+                result = translate(text_to_translate)
+                tones.beep(523, 100)
+                tones.beep(659, 100)
+                wx.CallAfter(setClipboardText, result)
+                wx.CallAfter(ui.message, result)
             except Exception as e:
-                wx.CallAfter(ui.message, "Exception: " + str(e))
-        threading.Thread(target=doTranslation, daemon=True).start()
+                tones.beep(200, 200)
+                wx.CallAfter(ui.message, _("Translation failed: ") + str(e)[:200])
+                
+        threading.Thread(target=doTranslation, args=(clip,), daemon=True).start()
 
     @script(gesture="kb:NVDA+Alt+g", description=_("Opens LinguaPal chat dialog"))
     def script_customPrompt(self, gesture):
