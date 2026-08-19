@@ -15,10 +15,13 @@ import addonHandler
 import threading
 import json
 import tones
+import base64
+import ctypes
+import ctypes.wintypes
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "0.1.9"
+ADDON_VERSION = "1.0.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json"
 roleSECTION = "LinguaPal"
 
@@ -74,15 +77,20 @@ def _call_gemini_api(data: dict, stream=False):
         raise Exception(f"Gemini error {response.status_code}: {error_msg}")
     if stream:
         def generate():
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
+            buf = b""
+            for raw in response.iter_content(chunk_size=None):
+                if not raw:
+                    continue
+                buf += raw
+                while b"\n" in buf:
+                    line_bytes, buf = buf.split(b"\n", 1)
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
                     if line.startswith("data: "):
                         try:
-                            chunk = json.loads(line[6:])
-                            if "candidates" in chunk and len(chunk["candidates"]) > 0:
-                                parts = chunk["candidates"][0]["content"]["parts"]
-                                if len(parts) > 0 and "text" in parts[0]:
+                            obj = json.loads(line[6:])
+                            if "candidates" in obj and obj["candidates"]:
+                                parts = obj["candidates"][0]["content"]["parts"]
+                                if parts and "text" in parts[0]:
                                     yield parts[0]["text"]
                         except Exception:
                             pass
@@ -113,9 +121,9 @@ def sendGeminiChat(messages, stream=False):
     return _call_gemini_api(data, stream=stream)
 
 
-def sendGroqRequest(messages: list, stream=False, use_system_prompt=True):
+def sendGroqRequest(messages: list, stream=False, use_system_prompt=True, model_override=None):
     apiKey = config.conf[roleSECTION]["apiKey"]
-    groqModel = config.conf[roleSECTION]["groqModel"]
+    groqModel = model_override if model_override else config.conf[roleSECTION]["groqModel"]
     if not apiKey:
         raise Exception(_("Groq API key not set. Please go to add-on settings and enter your key."))
     if use_system_prompt:
@@ -141,7 +149,17 @@ def sendGroqRequest(messages: list, stream=False, use_system_prompt=True):
         except Exception:
             error_msg = f"Received non-JSON response: {response.text[:100]}"
         if response.status_code == 400 and any(x in error_msg.lower() for x in ["text classification", "single user message"]):
-            raise Exception(_("The selected Groq model is a text classification model and cannot generate text. Please open LinguaPal settings and choose a different model such as openai/gpt-oss-20b."))
+            raise Exception(_(("The selected Groq model is a text classification model and cannot generate text. "
+                                "Please open LinguaPal settings and choose a different model such as openai/gpt-oss-20b.")))
+        if response.status_code == 400 and "content must be a string" in error_msg.lower():
+            raise Exception(_(("The selected Groq model does not support image inputs. "
+                                "Please select a vision-capable model such as meta-llama/llama-4-scout-17b-16e-instruct "
+                                "or qwen/qwen3-vl-32b-instruct in LinguaPal settings, then try again.")))
+        if response.status_code == 400 and "requires terms acceptance" in error_msg.lower():
+            raise Exception(_(("This Groq model requires terms acceptance before it can be used. "
+                                "Please visit console.groq.com, find the model in the playground, "
+                                "accept its terms as org admin, then try again. "
+                                "Or switch to a different model in LinguaPal settings.")))
         raise Exception(f"Groq error {response.status_code}: {error_msg}")
     if stream:
         def generate():
@@ -280,6 +298,36 @@ class UpdateDialog(wx.Dialog):
         self.CenterOnParent()
 
 
+def _capture_foreground_window():
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    rect = ctypes.wintypes.RECT()
+    ok = ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    if ok and (rect.right - rect.left) > 0 and (rect.bottom - rect.top) > 0:
+        x, y = rect.left, rect.top
+        w, h = rect.right - rect.left, rect.bottom - rect.top
+    else:
+        x, y = 0, 0
+        w = wx.SystemSettings.GetMetric(wx.SYS_SCREEN_X)
+        h = wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y)
+    screen_dc = wx.ScreenDC()
+    bitmap = wx.Bitmap(w, h)
+    mem_dc = wx.MemoryDC()
+    mem_dc.SelectObject(bitmap)
+    mem_dc.Blit(0, 0, w, h, screen_dc, x, y)
+    mem_dc.SelectObject(wx.NullBitmap)
+    tmp = tempfile.mktemp(suffix='.png')
+    try:
+        bitmap.SaveFile(tmp, wx.BITMAP_TYPE_PNG)
+        with open(tmp, 'rb') as f:
+            data = f.read()
+    finally:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+    return base64.b64encode(data).decode('utf-8'), 'image/png'
+
+
 class MessageViewerDialog(wx.Dialog):
     def __init__(self, parent, text):
         super().__init__(parent, -1, title=_("Full Message"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
@@ -316,6 +364,9 @@ class GeminiChatDialog(wx.Dialog):
         super().__init__(gui.mainFrame, -1, title=title)
         self.chat_history = []
         self.full_messages = []
+        self.pending_image_b64 = None
+        self.pending_image_mime = None
+        self.pending_image_name = None
         self.initUI()
 
     def initUI(self):
@@ -331,6 +382,20 @@ class GeminiChatDialog(wx.Dialog):
         self.inputBox = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_RICH)
         self.inputBox.SetName(_("Message input"))
         sizer.Add(self.inputBox, 1, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        imgSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.attachBtn = wx.Button(self, label=_("&Attach Image"))
+        self.attachBtn.Bind(wx.EVT_BUTTON, self.onAttachImage)
+        imgSizer.Add(self.attachBtn, 0, flag=wx.RIGHT, border=6)
+        self.removeImgBtn = wx.Button(self, label=_("&Remove Image"))
+        self.removeImgBtn.Bind(wx.EVT_BUTTON, self.onRemoveImage)
+        self.removeImgBtn.Hide()
+        imgSizer.Add(self.removeImgBtn, 0, flag=wx.RIGHT, border=10)
+        self.imgStatusLabel = wx.StaticText(self, label=_("No image attached"))
+        self.imgStatusLabel.SetName(_("Image attachment status"))
+        imgSizer.Add(self.imgStatusLabel, 1, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(imgSizer, 0, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+
         btn = wx.Button(self, id=wx.ID_OK, label=_("&Send"))
         btn.Bind(wx.EVT_BUTTON, self.onSend)
         sizer.Add(btn, 0, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
@@ -369,22 +434,91 @@ class GeminiChatDialog(wx.Dialog):
         dlg.ShowModal()
         dlg.Destroy()
 
+    def onAttachImage(self, event):
+        wildcard = _("Images (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp|All files (*.*)|*.*")
+        with wx.FileDialog(self, _("Select Image to Attach"), wildcard=wildcard,
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        try:
+            ext = os.path.splitext(path)[1].lower()
+            mime_map = {
+                '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp'
+            }
+            mime = mime_map.get(ext, 'image/jpeg')
+            with open(path, 'rb') as f:
+                raw = f.read()
+            self.pending_image_b64 = base64.b64encode(raw).decode('utf-8')
+            self.pending_image_mime = mime
+            self.pending_image_name = os.path.basename(path)
+            self.imgStatusLabel.SetLabel(_("Attached: ") + self.pending_image_name)
+            self.removeImgBtn.Show()
+            self.Layout()
+            ui.message(_("Image attached: ") + self.pending_image_name)
+        except Exception as e:
+            ui.message(_("Could not load image: ") + str(e))
+
+    def onRemoveImage(self, event):
+        if self.pending_image_b64 is None:
+            ui.message(_("No image attached."))
+            return
+        self.pending_image_b64 = None
+        self.pending_image_mime = None
+        self.pending_image_name = None
+        self.imgStatusLabel.SetLabel(_("No image attached"))
+        self.removeImgBtn.Hide()
+        self.Layout()
+        ui.message(_("Image removed."))
+
     def onSend(self, event):
         user_message = self.inputBox.GetValue().strip()
-        if not user_message:
+        if not user_message and self.pending_image_b64 is None:
             return
+        if not user_message:
+            user_message = _("(Image attached)")
         self.inputBox.Clear()
-        self.appendToChat("You", user_message)
-        self.chat_history.append({"role": "user", "text": user_message})
+
+        img_b64 = self.pending_image_b64
+        img_mime = self.pending_image_mime
+        img_name = self.pending_image_name
+        self.pending_image_b64 = None
+        self.pending_image_mime = None
+        self.pending_image_name = None
+        self.imgStatusLabel.SetLabel(_("No image attached"))
+        if img_name:
+            self.removeImgBtn.Hide()
+            self.Layout()
+
+        display_msg = f"[{_('Image')}: {img_name}] {user_message}" if img_name else user_message
+        self.appendToChat("You", display_msg)
+        self.chat_history.append({"role": "user", "text": user_message,
+                                   "image_b64": img_b64, "image_mime": img_mime})
+
         if len(self.chat_history) > MAX_CHAT_HISTORY:
             excess = len(self.chat_history) - MAX_CHAT_HISTORY
             self.chat_history = self.chat_history[-MAX_CHAT_HISTORY:]
-            for _ in range(excess):
+            for _i in range(excess):
                 if self.historyBox.GetCount() > 0:
                     self.historyBox.Delete(0)
                 if self.full_messages:
                     self.full_messages.pop(0)
         wx.CallAfter(self.getResponse)
+
+    def injectScreenshot(self, b64, mime, name):
+        self.pending_image_b64 = b64
+        self.pending_image_mime = mime
+        self.pending_image_name = name
+        self.imgStatusLabel.SetLabel(_("Attached: ") + name)
+        self.removeImgBtn.Show()
+        self.Layout()
+        self.inputBox.SetValue(_(
+            "Please describe this screenshot in detail for a blind user. "
+            "Include all visible text, UI controls and their states, "
+            "any error messages, and the application name if visible."
+        ))
+        self.onSend(None)
 
     def appendToChat(self, speaker, message):
         clean_message = re.sub(r'\n\s*\n+', '\n', message.strip())
@@ -404,15 +538,42 @@ class GeminiChatDialog(wx.Dialog):
             try:
                 model = config.conf[roleSECTION]["model"]
                 if model == "gemini":
-                    stream = sendGeminiChat(self.chat_history, stream=True)
                     ai_name = "Gemini"
+                    gemini_messages = []
+                    for i, msg in enumerate(self.chat_history):
+                        is_last = (i == len(self.chat_history) - 1)
+                        if is_last and msg.get("image_b64"):
+                            parts = [
+                                {"inline_data": {"mime_type": msg["image_mime"], "data": msg["image_b64"]}},
+                                {"text": msg["text"]}
+                            ]
+                        else:
+                            parts = [{"text": msg["text"]}]
+                        gemini_messages.append({"role": msg["role"], "parts": parts})
+                    data = {"contents": gemini_messages}
+                    sys_prompt = config.conf[roleSECTION].get("systemPrompt", "").strip()
+                    if sys_prompt:
+                        data["system_instruction"] = {"parts": [{"text": sys_prompt}]}
+                    stream = _call_gemini_api(data, stream=True)
                 else:
-                    groq_messages = []
-                    for msg in self.chat_history:
-                        role = "assistant" if msg["role"] == "model" else msg["role"]
-                        groq_messages.append({"role": role, "content": msg["text"]})
-                    stream = sendGroqRequest(groq_messages, stream=True)
                     ai_name = "Groq"
+                    groq_messages = []
+                    has_image = any(msg.get("image_b64") for msg in self.chat_history)
+                    vision_model = "qwen/qwen3.6-27b" if has_image else None
+                    for i, msg in enumerate(self.chat_history):
+                        role = "assistant" if msg["role"] == "model" else msg["role"]
+                        is_last = (i == len(self.chat_history) - 1)
+                        if is_last and msg.get("image_b64"):
+                            content = [
+                                {"type": "image_url", "image_url": {
+                                    "url": f"data:{msg['image_mime']};base64,{msg['image_b64']}"
+                                }},
+                                {"type": "text", "text": msg["text"]}
+                            ]
+                        else:
+                            content = msg["text"]
+                        groq_messages.append({"role": role, "content": content})
+                    stream = sendGroqRequest(groq_messages, stream=True, model_override=vision_model)
 
                 full_response = ""
                 sentence_buffer = ""
@@ -522,6 +683,9 @@ class LinguaPalSettingsPanel(SettingsPanel):
             groq_choices = [
                 "openai/gpt-oss-20b",
                 "openai/gpt-oss-120b",
+                "meta-llama/llama-4-scout-17b-16e-instruct",
+                "meta-llama/llama-4-maverick-17b-128e-instruct",
+                "qwen/qwen3-vl-32b-instruct",
                 "groq/compound-mini",
                 "groq/compound",
                 "minimaxai/minimax-m2.5",
@@ -612,7 +776,7 @@ class LinguaPalSettingsPanel(SettingsPanel):
                     if r.status_code == 200:
                         models = r.json().get("data", [])
                         groq_names = []
-                        exclude = ["whisper", "embed", "vision", "audio", "image", "tts", "guard"]
+                        exclude = ["whisper", "embed", "audio", "image", "tts", "guard", "orpheus", "canopylabs"]
                         for m in models:
                             mid = m["id"].lower()
                             if not any(x in mid for x in exclude):
@@ -733,6 +897,30 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception as e:
             ui.message(_("Error: ") + str(e))
 
+    @script(gesture="kb:NVDA+Alt+d", description=_("Describe focused window using AI vision"))
+    def script_describeScreen(self, gesture):
+        tones.beep(500, 80)
+        try:
+            b64, mime = _capture_foreground_window()
+        except Exception as e:
+            ui.message(_("Screen capture failed: ") + str(e))
+            return
+        try:
+            if self.chatDialog is not None:
+                try:
+                    if not self.chatDialog.IsShown():
+                        self.chatDialog = None
+                except Exception:
+                    self.chatDialog = None
+            if self.chatDialog is None:
+                self.chatDialog = GeminiChatDialog()
+                self.chatDialog.Bind(wx.EVT_CLOSE, self.onDialogClose)
+            else:
+                self.chatDialog.Raise()
+            self.chatDialog.injectScreenshot(b64, mime, _("screenshot.png"))
+        except Exception as e:
+            ui.message(_("Error: ") + str(e))
+
     @script(gesture="kb:NVDA+Alt+s", description=_("Opens LinguaPal settings panel"))
     def script_openSettingsDialog(self, gesture):
         try:
@@ -749,3 +937,4 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             NVDASettingsDialog.categoryClasses.remove(LinguaPalSettingsPanel)
         except Exception:
             pass
+

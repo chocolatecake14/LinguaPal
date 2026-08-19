@@ -1,6 +1,6 @@
 {
-  "version": "0.1.9",
-  "changelog": "Fixed many bugs with streaming, Groq models, chat dialog and over all code improvements.",
-  "downloadUrl": "https://github.com/chocolatecake14/LinguaPal/releases/download/0.1.9/LinguaPal-0.1.9.nvda-addon"
+  "version": "1.0.0",
+  "changelog": "New features:\nAdded an option to attach images in the chat dialog, choose any image from your computer and have your AI describe it for you. You can also ask follow-up questions in the same chat.\nAdded a hotkey to describe the currently focused window, useful for describing errors / inaccessible content. By default, the shortcut is NVDA+Alt+D and can be changed from Settings > Input Gestures.\nWhen using Groq, qwen/qwen3.6-27b model will always be used for describing images regardless of whatever is configured in the settings.\nImprovements:\nFixed response streaming when using Gemini.",
+  "downloadUrl": "https://github.com/chocolatecake14/LinguaPal/releases/download/1.0.0/LinguaPal-1.0.0.nvda-addon"
 }
    
