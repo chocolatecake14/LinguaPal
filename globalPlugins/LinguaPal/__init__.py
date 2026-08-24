@@ -21,12 +21,13 @@ import ctypes.wintypes
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "1.0.0"
+ADDON_VERSION = "1.1.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json"
 roleSECTION = "LinguaPal"
 
 confspec = {
-    "translateTo": "string(default=English United States)",
+    "translateTo": "string(default=English (United States))",
+    "secondaryTranslateTo": "string(default=Urdu (Pakistan))",
     "apiKey": "string(default=)",
     "geminiApiKey": "string(default=)",
     "model": "string(default=groq)",
@@ -367,6 +368,7 @@ class GeminiChatDialog(wx.Dialog):
         self.pending_image_b64 = None
         self.pending_image_mime = None
         self.pending_image_name = None
+        self.last_sent_image_name = None
         self.initUI()
 
     def initUI(self):
@@ -420,7 +422,9 @@ class GeminiChatDialog(wx.Dialog):
                 else:
                     self.onSend(None)
                 return
-        event.Skip()
+            event.Skip()
+        else:
+            event.Skip()
 
     def onDoubleClick(self, event):
         self.showFullMessage()
@@ -453,7 +457,7 @@ class GeminiChatDialog(wx.Dialog):
             self.pending_image_b64 = base64.b64encode(raw).decode('utf-8')
             self.pending_image_mime = mime
             self.pending_image_name = os.path.basename(path)
-            self.imgStatusLabel.SetLabel(_("Attached: ") + self.pending_image_name)
+            self.imgStatusLabel.SetLabel(_("Attached for next message: ") + self.pending_image_name)
             self.removeImgBtn.Show()
             self.Layout()
             ui.message(_("Image attached: ") + self.pending_image_name)
@@ -467,10 +471,13 @@ class GeminiChatDialog(wx.Dialog):
         self.pending_image_b64 = None
         self.pending_image_mime = None
         self.pending_image_name = None
-        self.imgStatusLabel.SetLabel(_("No image attached"))
+        if self.last_sent_image_name:
+            self.imgStatusLabel.SetLabel(_("Active image in chat: ") + self.last_sent_image_name)
+        else:
+            self.imgStatusLabel.SetLabel(_("No image attached"))
         self.removeImgBtn.Hide()
         self.Layout()
-        ui.message(_("Image removed."))
+        ui.message(_("Pending image removed."))
 
     def onSend(self, event):
         user_message = self.inputBox.GetValue().strip()
@@ -486,10 +493,16 @@ class GeminiChatDialog(wx.Dialog):
         self.pending_image_b64 = None
         self.pending_image_mime = None
         self.pending_image_name = None
-        self.imgStatusLabel.SetLabel(_("No image attached"))
+
         if img_name:
+            self.last_sent_image_name = img_name
+            self.imgStatusLabel.SetLabel(_("Active image in chat: ") + img_name)
             self.removeImgBtn.Hide()
             self.Layout()
+        elif self.last_sent_image_name:
+            self.imgStatusLabel.SetLabel(_("Active image in chat: ") + self.last_sent_image_name)
+        else:
+            self.imgStatusLabel.SetLabel(_("No image attached"))
 
         display_msg = f"[{_('Image')}: {img_name}] {user_message}" if img_name else user_message
         self.appendToChat("You", display_msg)
@@ -510,9 +523,6 @@ class GeminiChatDialog(wx.Dialog):
         self.pending_image_b64 = b64
         self.pending_image_mime = mime
         self.pending_image_name = name
-        self.imgStatusLabel.SetLabel(_("Attached: ") + name)
-        self.removeImgBtn.Show()
-        self.Layout()
         self.inputBox.SetValue(_(
             "Please describe this screenshot in detail for a blind user. "
             "Include all visible text, UI controls and their states, "
@@ -731,20 +741,118 @@ class LinguaPalSettingsPanel(SettingsPanel):
         ))
 
         languages = [
-            "English United States", "German Germany", "Urdu Pakistan", "French France",
-            "Spanish Spain", "Arabic Standard", "Hindi India", "Chinese Mandarin (Simplified)",
-            "Russian Russia", "Portuguese Brazil", "Bengali Bangladesh", "Japanese Japan",
-            "Korean South Korea", "Italian Italy", "Turkish Turkey", "Persian Iran",
-            "Malay Malaysia", "Swahili Kenya", "Tamil India", "Punjabi Pakistan",
-            "Vietnamese Vietnam", "Indonesian Indonesia", "Dutch Netherlands", "Polish Poland",
-            "Filipino Philippines", "Thai Thailand", "Ukrainian Ukraine", "Romanian Romania",
-            "Greek Greece", "Amharic Ethiopia"
+            "Afrikaans (South Africa)",
+            "Albanian (Albania)",
+            "Amharic (Ethiopia)",
+            "Arabic (Modern Standard)",
+            "Armenian (Armenia)",
+            "Azerbaijani (Azerbaijan)",
+            "Bengali (Bangladesh)",
+            "Bosnian (Bosnia and Herzegovina)",
+            "Bulgarian (Bulgaria)",
+            "Catalan (Spain)",
+            "Chinese (Simplified)",
+            "Chinese (Traditional)",
+            "Croatian (Croatia)",
+            "Czech (Czech Republic)",
+            "Danish (Denmark)",
+            "Dutch (Netherlands)",
+            "English (United Kingdom)",
+            "English (United States)",
+            "Estonian (Estonia)",
+            "Filipino (Philippines)",
+            "Finnish (Finland)",
+            "French (France)",
+            "Georgian (Georgia)",
+            "German (Germany)",
+            "Greek (Greece)",
+            "Gujarati (India)",
+            "Hebrew (Israel)",
+            "Hindi (India)",
+            "Hungarian (Hungary)",
+            "Icelandic (Iceland)",
+            "Indonesian (Indonesia)",
+            "Irish (Ireland)",
+            "Italian (Italy)",
+            "Japanese (Japan)",
+            "Kannada (India)",
+            "Kazakh (Kazakhstan)",
+            "Korean (South Korea)",
+            "Kurdish (Kurmanji)",
+            "Kurdish (Sorani)",
+            "Kyrgyz (Kyrgyzstan)",
+            "Latvian (Latvia)",
+            "Lithuanian (Lithuania)",
+            "Macedonian (North Macedonia)",
+            "Malay (Malaysia)",
+            "Malayalam (India)",
+            "Marathi (India)",
+            "Mongolian (Mongolia)",
+            "Nepali (Nepal)",
+            "Norwegian (Norway)",
+            "Pashto (Afghanistan)",
+            "Persian (Iran)",
+            "Polish (Poland)",
+            "Portuguese (Brazil)",
+            "Portuguese (Portugal)",
+            "Punjabi (India)",
+            "Punjabi (Pakistan)",
+            "Romanian (Romania)",
+            "Russian (Russia)",
+            "Serbian (Cyrillic)",
+            "Serbian (Latin)",
+            "Sindhi (Pakistan)",
+            "Sinhala (Sri Lanka)",
+            "Slovak (Slovakia)",
+            "Slovenian (Slovenia)",
+            "Somali (Somalia)",
+            "Spanish (Latin America)",
+            "Spanish (Spain)",
+            "Swahili (Kenya)",
+            "Swedish (Sweden)",
+            "Tamil (India)",
+            "Telugu (India)",
+            "Thai (Thailand)",
+            "Turkish (Turkey)",
+            "Ukrainian (Ukraine)",
+            "Urdu (Pakistan)",
+            "Uzbek (Uzbekistan)",
+            "Vietnamese (Vietnam)",
+            "Welsh (United Kingdom)"
         ]
         languages.sort()
-        self.langLabel = sHelper.addItem(wx.StaticText(self, label=_("Translate to")))
+
+        self.langLabel = sHelper.addItem(wx.StaticText(self, label=_("Primary target language")))
         self.langChoice = sHelper.addItem(wx.Choice(self))
         self.langChoice.Set(languages)
-        self.langChoice.SetStringSelection(config.conf[roleSECTION]["translateTo"])
+        current_primary = config.conf[roleSECTION].get("translateTo", "English (United States)")
+        if current_primary in languages:
+            self.langChoice.SetStringSelection(current_primary)
+        else:
+            matched = False
+            for lang in languages:
+                if current_primary and current_primary.split()[0].lower() in lang.lower():
+                    self.langChoice.SetStringSelection(lang)
+                    matched = True
+                    break
+            if not matched:
+                self.langChoice.SetSelection(0)
+
+        self.secondaryLangLabel = sHelper.addItem(wx.StaticText(self, label=_("Secondary target language")))
+        self.secondaryLangChoice = sHelper.addItem(wx.Choice(self))
+        self.secondaryLangChoice.Set(languages)
+        current_secondary = config.conf[roleSECTION].get("secondaryTranslateTo", "Urdu (Pakistan)")
+        if current_secondary in languages:
+            self.secondaryLangChoice.SetStringSelection(current_secondary)
+        else:
+            matched = False
+            for lang in languages:
+                if current_secondary and current_secondary.split()[0].lower() in lang.lower():
+                    self.secondaryLangChoice.SetStringSelection(lang)
+                    matched = True
+                    break
+            if not matched:
+                self.secondaryLangChoice.SetStringSelection("Urdu (Pakistan)" if "Urdu (Pakistan)" in languages else languages[0])
 
         self.updateCheckBox = sHelper.addItem(wx.CheckBox(self, label=_("Check for updates at NVDA startup")))
         self.updateCheckBox.SetValue(config.conf[roleSECTION].get("checkUpdatesAtStartup", True))
@@ -843,6 +951,7 @@ class LinguaPalSettingsPanel(SettingsPanel):
         config.conf[roleSECTION]["geminiModel"] = self.geminiModelChoice.GetStringSelection()
         config.conf[roleSECTION]["systemPrompt"] = self.promptField.GetValue()
         config.conf[roleSECTION]["translateTo"] = self.langChoice.GetStringSelection()
+        config.conf[roleSECTION]["secondaryTranslateTo"] = self.secondaryLangChoice.GetStringSelection()
         config.conf[roleSECTION]["checkUpdatesAtStartup"] = self.updateCheckBox.GetValue()
 
 
@@ -855,6 +964,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self.chatDialog = None
         if config.conf[roleSECTION].get("checkUpdatesAtStartup", True):
             wx.CallLater(5000, checkForUpdates, False)
+
+    @script(gesture="kb:NVDA+Alt+t", description=_("Swaps active translation target language with the secondary language"))
+    def script_swapLanguages(self, gesture):
+        current = config.conf[roleSECTION].get("translateTo", "English (United States)")
+        secondary = config.conf[roleSECTION].get("secondaryTranslateTo", "Urdu (Pakistan)")
+
+        if current == secondary:
+            tones.beep(300, 100)
+            ui.message(_("Translation language is already set to {lang}. No changes made.").format(lang=current))
+            return
+
+        config.conf[roleSECTION]["translateTo"] = secondary
+        config.conf[roleSECTION]["secondaryTranslateTo"] = current
+
+        tones.beep(523, 60)
+        tones.beep(784, 80)
+        ui.message(_("Target language: {lang}").format(lang=secondary))
 
     @script(gesture="kb:NVDA+Alt+c", description=_("Translates clipboard text using the currently selected AI model"))
     def script_translateClipboard(self, gesture):

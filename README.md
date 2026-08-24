@@ -1,52 +1,50 @@
-# README
+# LinguaPal
 
-An NVDA add-on for seamless language translation and conversation with AI using Google Gemini and Groq.
+An NVDA add-on for seamless language translation, image description, and conversation with AI using Google Gemini and Groq.
 
 ## Important Note
-This add-on was recently renamed from **AskGemini** to **LinguaPal**. If you have an older version of AskGemini installed, please remove it before installing LinguaPal to avoid conflicts.
+This add-on was previously named **AskGemini** and has been completely overhauled into **LinguaPal**. If you have an older version of AskGemini installed, please remove it before installing LinguaPal to avoid conflicts.
 
 ## Features
-- **Real-time Translation:** Translate clipboard content using your selected AI model.
-- **AI Chat:** Talk to your favorite AI models (Gemini / Groq) for real-time conversations, suggestions, and queries.
-- **Context-Aware:** Prompts are designed to be context-aware for better responses.
-
-## Installation
-1. Download the latest `.nvda-addon` file.
-2. Open the file; NVDA will prompt you to install the add-on.
-3. Restart NVDA.
+- **Real-time Clipboard Translation:** Translate copied text instantly using your selected AI model.
+- **Fast Dual-Target Language Swap:** Easily toggle between your Primary and Secondary target languages with a single hotkey.
+- **Screen & Window Description (AI Vision):** Take a snapshot of your focused window and have AI describe visible UI controls, text, errors, and contents in detail.
+- **AI Chat Dialog with Image Attachments:** Chat interactively with Gemini or Groq models, attach image files from your computer, and ask follow-up questions.
+- **Dynamic Model Fetching:** Automatically query and refresh the latest available models for both Groq and Gemini with a single click.
 
 ## Default Hotkeys
-- **NVDA + Alt + C:** Translate the clipboard text.
+- **NVDA + Alt + C:** Translate clipboard text to the active target language.
+- **NVDA + Alt + T:** Swap active translation target language (Primary &harr; Secondary).
 - **NVDA + Alt + G:** Open the LinguaPal AI chat window.
-- **NVDA + Control + Alt + S:** Open LinguaPal settings.
-- *Note: You can customize these shortcuts in the NVDA Input Gestures dialog.*
+- **NVDA + Alt + D:** Describe the currently focused window using AI vision.
+- **NVDA + Alt + S:** Open LinguaPal settings panel directly.
+
+*Note: All shortcuts can be customized in the NVDA Input Gestures dialog (`NVDA Menu > Preferences > Input Gestures > LinguaPal`).*
 
 ## Setup Instructions
-To make the add-on work, you must configure your API keys in the settings panel:
-1. Open NVDA Settings and navigate to the **LinguaPal** category.
-2. Select your preferred AI model (Gemini or Groq).
-3. Paste the corresponding API key into the configuration field.
-4. Set your target translation language.
+To get started, configure your API keys and language preferences:
+1. Open NVDA Settings (`NVDA + Alt + S` or via `NVDA Menu > Preferences > Settings > LinguaPal`).
+2. Choose your preferred AI Provider (**Groq** or **Gemini**).
+3. Paste your corresponding API key.
+4. Select your **Primary target language** and **Secondary target language**.
+5. (Optional) Customize the System Prompt (AI Persona) or fetch available models.
+6. Click **OK** to save.
 
 ---
 
 ## How to Obtain API Keys
 
 ### 1. Google Gemini API Key
-Follow these steps to get a free key via Google AI Studio:
 1. Visit [Google AI Studio](https://aistudio.google.com/) and sign in with your Google account.
-2. Navigate to the **API Key** page (https://aistudio.google.com/app/apikey).
-3. Review and accept the Google APIs Terms of Service.
-4. Click **Create API key** (choose an existing project or create a new one).
-5. Copy the generated key and paste it into the LinguaPal settings.
+2. Navigate to [Get API Key](https://aistudio.google.com/app/apikey).
+3. Click **Create API key**.
+4. Copy the generated key and paste it into LinguaPal settings under Gemini API Key.
 
 ### 2. Groq API Key
-Follow these steps to get a key for high-performance models:
 1. Visit the [Groq Console](https://console.groq.com/keys).
 2. Sign in using a Google or GitHub account.
-3. If prompted, activate a free plan (Groq currently offers free access with limits).
-4. Click the **Create API Key** button.
-5. Copy the new key immediately and store it safely; you will need to paste it into LinguaPal settings.
+3. Click the **Create API Key** button.
+4. Copy the new key and paste it into LinguaPal settings under Groq API Key.
 
 ---
 
@@ -54,11 +52,10 @@ Follow these steps to get a key for high-performance models:
 - NVDA 2023.2 or later.
 - Active internet connection.
 
-## Contact and contributing
+## Contact & Contributing
+Contributions are welcome! If you find a bug or have a suggestion for a new feature, feel free to open an issue or submit a pull request.
 
-Contributions are welcome! If you find a bug or have a suggestion for a new feature, please open an issue or submit a pull request.
-
-If you wish to contact me, do so on Telegram: [@MalikAli01](https://t.me/MalikAli01)
+If you wish to reach out, contact on Telegram: [@MalikAli01](https://t.me/MalikAli01)
 
 ## License
 Distributed under the GNU General Public License v2.0.
