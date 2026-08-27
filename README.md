@@ -7,9 +7,11 @@ This add-on was previously named **AskGemini** and has been completely overhaule
 
 ## Features
 - **Real-time Clipboard Translation:** Translate copied text instantly using your selected AI model.
-- **Fast Dual-Target Language Swap:** Easily toggle between your Primary and Secondary target languages with a single hotkey.
+- **Fast Dual-Target Language Swap:** Easily toggle between your Primary and Secondary target languages with a single hotkey (`NVDA+Alt+T`).
 - **Screen & Window Description (AI Vision):** Take a snapshot of your focused window and have AI describe visible UI controls, text, errors, and contents in detail.
 - **AI Chat Dialog with Image Attachments:** Chat interactively with Gemini or Groq models, attach image files from your computer, and ask follow-up questions.
+- **NVDA Tools Submenu:** Access all LinguaPal actions, settings, update checks, and changelog from *NVDA Menu > Tools > LinguaPal*.
+- **Integrated "What's New":** View detailed changelogs directly from the NVDA Tools menu or from the settings panel.
 - **Dynamic Model Fetching:** Automatically query and refresh the latest available models for both Groq and Gemini with a single click.
 
 ## Default Hotkeys

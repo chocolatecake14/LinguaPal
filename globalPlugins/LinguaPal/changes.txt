@@ -1,0 +1,29 @@
+#Version 1.2.0:
+What's new:
+- You can now read changelog of every new version released (both from settings, and tools submenu).
+* Interactive Response Streaming Control:
+  - "Send" button turns into a "Stop" button during active streaming.
+  - Pressing Escape or closing the chat window immediately halts response generation and speech output.
+* Chat List Clipboard Copy & Clear History:
+  - Press Ctrl+C on any message in the message history list to copy the full message directly to the clipboard.
+  - Added a dedicated "Clear History" button to instantly clear the chat history and active image state.
+* Clipboard Image Paste Support (Ctrl+V in Chat Input):
+  - Pressing Ctrl+V while focused on the chat message input field automatically detects if an image (raw bitmap or copied image file) is on the clipboard and attaches it for the message.
+* Configurable Translation Clipboard Behavior:
+  - Added a new setting: "Copy translation to clipboard automatically", allowing users to hear translations without modifying their clipboard if desired.
+* Grouped Provider Settings Panel:
+  - Organized settings into distinct sections for Groq, Gemini, Translation & Language, and General tools with independent API key inputs.
+* NVDA Tools Submenu:
+  - Added "LinguaPal" submenu under NVDA Menu > Tools with shortcuts to all features, Settings, What's New, and Check for Updates.
+* Added an alternative way to access Gemini if it's blocked in a region:
+  - Check the check box in the settings panel "If Gemini is blocked on this network, retry through the LinguaPal proxy" if you can't access Gemini otherwise. (Would not work for regions where Cloudflare is also blocked).
+Bug fixes & improvements:
+- Removed unused code from previous versions of the add-on.
+- Made the codebase much cleaner.
+
+Version 1.1.0:
+What's new:
+- Added Fast Language Swap (NVDA+Alt+T, configurable from Input Gestures): Instantly toggle between your primary and secondary translation target languages.
+- Added Primary and Secondary Target Language selectors in LinguaPal settings panel.
+Bug fixes & improvements:
+- Fixed an issue where the image attachment status incorrectly displayed 'No image attached' after sending a screenshot or image in chat dialog.
