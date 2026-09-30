@@ -6,6 +6,7 @@ from gui import SettingsPanel, guiHelper
 from .config_spec import (
     roleSECTION, _http, HTTP_TIMEOUT, groqBaseUrls, geminiBaseUrls,
     AUTO_MODEL, SAME_MODEL, cacheClear, prewarmConnection, noteEndpointSuccess,
+    getQuickPrompt, setQuickPrompt, QUICK_PROMPT_DEFAULTS, PRESET_INDICES,
 )
 from .updater import checkForUpdates
 from .dialogs import showWhatsNew
@@ -38,13 +39,10 @@ class LinguaPalSettingsPanel(SettingsPanel):
             groq_choices = [
                 "openai/gpt-oss-20b",
                 "openai/gpt-oss-120b",
-                "meta-llama/llama-4-scout-17b-16e-instruct",
-                "meta-llama/llama-4-maverick-17b-128e-instruct",
-                "qwen/qwen3-vl-32b-instruct",
-                "groq/compound-mini",
-                "groq/compound",
-                "minimaxai/minimax-m2.5",
-                "moonshotai/kimi-k2-instruct"
+                "qwen/qwen3.6-27b",
+                "qwen/qwen3.8-27b",
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
             ]
         saved_groq = config.conf[roleSECTION].get("groqModel", "openai/gpt-oss-20b")
         if saved_groq not in groq_choices:
@@ -219,6 +217,42 @@ class LinguaPalSettingsPanel(SettingsPanel):
         ))
         self.copyClipCheckBox.SetValue(config.conf[roleSECTION].get("copyTranslationToClipboard", True))
 
+        # --- Quick Prompts Settings ---
+        self.quickPromptsSectionLabel = sHelper.addItem(wx.StaticText(self, label=_("--- Quick Prompts (Command Layer Keys 1-9, 0) ---")))
+
+        self._promptsData = {}
+        for i in PRESET_INDICES:
+            name, prompt = getQuickPrompt(i)
+            self._promptsData[i] = {"name": name, "prompt": prompt}
+        self._currentPromptIdx = 1
+
+        self.presetChoiceLabel = sHelper.addItem(wx.StaticText(self, label=_("Select &preset to configure:")))
+        presetChoices = [
+            f"Preset {i} (Key {i}): {self._promptsData[i]['name']}"
+            for i in PRESET_INDICES
+        ]
+        self.presetChoice = sHelper.addItem(wx.Choice(self, choices=presetChoices))
+        self.presetChoice.SetSelection(0)
+        self.presetChoice.Bind(wx.EVT_CHOICE, self.onPresetChoiceChanged)
+
+        self.presetNameLabel = sHelper.addItem(wx.StaticText(self, label=_("Preset &name:")))
+        self.presetNameField = sHelper.addItem(wx.TextCtrl(self, value=self._promptsData[1]["name"]))
+
+        self.presetPromptLabel = sHelper.addItem(wx.StaticText(self, label=_("Prompt &instruction:")))
+        self.presetPromptField = sHelper.addItem(wx.TextCtrl(
+            self, value=self._promptsData[1]["prompt"], style=wx.TE_MULTILINE
+        ))
+
+        resetSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.resetPresetBtn = wx.Button(self, label=_("&Reset this preset to default"))
+        self.resetPresetBtn.Bind(wx.EVT_BUTTON, self.onResetPreset)
+        resetSizer.Add(self.resetPresetBtn, 0, flag=wx.RIGHT, border=10)
+
+        self.resetAllPresetsBtn = wx.Button(self, label=_("Reset &all presets to default"))
+        self.resetAllPresetsBtn.Bind(wx.EVT_BUTTON, self.onResetAllPresets)
+        resetSizer.Add(self.resetAllPresetsBtn, 0)
+        sHelper.addItem(resetSizer)
+
         # --- General & Tool Settings ---
         self.generalSectionLabel = sHelper.addItem(wx.StaticText(self, label=_("--- General Settings ---")))
         self.promptLabel = sHelper.addItem(wx.StaticText(self, label=_("System Prompt (Persona):")))
@@ -366,7 +400,55 @@ class LinguaPalSettingsPanel(SettingsPanel):
     def _refreshTranslateChoice(self, ctrl, newChoices):
         self._fillTranslateChoice(ctrl, newChoices, self._readTranslateChoice(ctrl))
 
+    def _saveCurrentPresetToMemory(self):
+        idx = self._currentPromptIdx
+        self._promptsData[idx] = {
+            "name": self.presetNameField.GetValue().strip() or f"Preset {idx}",
+            "prompt": self.presetPromptField.GetValue().strip(),
+        }
+
+    def _updatePresetChoicesList(self):
+        sel = self.presetChoice.GetSelection()
+        newChoices = [
+            f"Preset {i} (Key {i}): {self._promptsData[i]['name']}"
+            for i in PRESET_INDICES
+        ]
+        self.presetChoice.SetItems(newChoices)
+        self.presetChoice.SetSelection(sel if sel != wx.NOT_FOUND else 0)
+
+    def onPresetChoiceChanged(self, event):
+        self._saveCurrentPresetToMemory()
+        self._updatePresetChoicesList()
+        sel = self.presetChoice.GetSelection()
+        newIdx = PRESET_INDICES[sel if sel != wx.NOT_FOUND else 0]
+        self._currentPromptIdx = newIdx
+        data = self._promptsData.get(newIdx, {"name": "", "prompt": ""})
+        self.presetNameField.SetValue(data["name"])
+        self.presetPromptField.SetValue(data["prompt"])
+
+    def onResetPreset(self, event):
+        idx = self._currentPromptIdx
+        def_data = QUICK_PROMPT_DEFAULTS.get(idx, {"name": f"Preset {idx}", "prompt": ""})
+        self._promptsData[idx] = {"name": def_data["name"], "prompt": def_data["prompt"]}
+        self.presetNameField.SetValue(def_data["name"])
+        self.presetPromptField.SetValue(def_data["prompt"])
+        self._updatePresetChoicesList()
+        ui.message(_("Preset {idx} reset to default.").format(idx=idx))
+
+    def onResetAllPresets(self, event):
+        for i in PRESET_INDICES:
+            def_data = QUICK_PROMPT_DEFAULTS.get(i, {"name": f"Preset {i}", "prompt": ""})
+            self._promptsData[i] = {"name": def_data["name"], "prompt": def_data["prompt"]}
+        data = self._promptsData[self._currentPromptIdx]
+        self.presetNameField.SetValue(data["name"])
+        self.presetPromptField.SetValue(data["prompt"])
+        self._updatePresetChoicesList()
+        ui.message(_("All presets reset to default."))
+
     def onSave(self):
+        self._saveCurrentPresetToMemory()
+        for i in PRESET_INDICES:
+            setQuickPrompt(i, self._promptsData[i]["name"], self._promptsData[i]["prompt"])
         config.conf[roleSECTION]["model"] = self.modelChoice.GetStringSelection().lower()
         config.conf[roleSECTION]["apiKey"] = self.groqKeyField.GetValue().strip()
         config.conf[roleSECTION]["geminiApiKey"] = self.geminiKeyField.GetValue().strip()

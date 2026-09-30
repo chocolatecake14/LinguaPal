@@ -9,13 +9,58 @@ from urllib.parse import urlparse
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "1.2.0"
+ADDON_VERSION = "1.3.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json"
 roleSECTION = "LinguaPal"
 
 GEMINI_DEFAULT_URL = "https://generativelanguage.googleapis.com"
 GEMINI_PROXY_URL = "https://linguapal-gemini.exclusiveinfolab.workers.dev"
 GROQ_DEFAULT_URL = "https://api.groq.com"
+
+PRESET_INDICES = (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+
+QUICK_PROMPT_DEFAULTS = {
+    1: {
+        "name": _("Summarize"),
+        "prompt": _("Summarize the following text clearly and concisely into key bullet points:"),
+    },
+    2: {
+        "name": _("Fix Grammar"),
+        "prompt": _("Proofread and correct grammar, spelling, and phrasing in the following text:"),
+    },
+    3: {
+        "name": _("Explain Simply"),
+        "prompt": _("Explain the following concept or text in simple and easy-to-understand terms:"),
+    },
+    4: {
+        "name": _("Rewrite Professionally"),
+        "prompt": _("Rewrite the following text in a clear, polished, and professional tone:"),
+    },
+    5: {
+        "name": _("Explain Code or Error"),
+        "prompt": _("Analyze and explain this code or error message, why it happens, and how to fix it:"),
+    },
+    6: {
+        "name": _("Preset 6"),
+        "prompt": "",
+    },
+    7: {
+        "name": _("Preset 7"),
+        "prompt": "",
+    },
+    8: {
+        "name": _("Preset 8"),
+        "prompt": "",
+    },
+    9: {
+        "name": _("Preset 9"),
+        "prompt": "",
+    },
+    0: {
+        "name": _("Preset 0"),
+        "prompt": "",
+    },
+}
 
 confspec = {
     "translateTo": "string(default=English (United States))",
@@ -32,10 +77,44 @@ confspec = {
     "checkUpdatesAtStartup": "boolean(default=True)",
     "copyTranslationToClipboard": "boolean(default=True)",
     "geminiModelCache": "string(default=)",
-    "groqModelCache": "string(default=)"
+    "groqModelCache": "string(default=)",
+    "quickPrompt1Name": "string(default=Summarize)",
+    "quickPrompt1": "string(default='Summarize the following text clearly and concisely into key bullet points:')",
+    "quickPrompt2Name": "string(default='Fix Grammar')",
+    "quickPrompt2": "string(default='Proofread and correct grammar, spelling, and phrasing in the following text:')",
+    "quickPrompt3Name": "string(default='Explain Simply')",
+    "quickPrompt3": "string(default='Explain the following concept or text in simple and easy-to-understand terms:')",
+    "quickPrompt4Name": "string(default='Rewrite Professionally')",
+    "quickPrompt4": "string(default='Rewrite the following text in a clear, polished, and professional tone:')",
+    "quickPrompt5Name": "string(default='Explain Code or Error')",
+    "quickPrompt5": "string(default='Analyze and explain this code or error message, why it happens, and how to fix it:')",
+    "quickPrompt6Name": "string(default='Preset 6')",
+    "quickPrompt6": "string(default='')",
+    "quickPrompt7Name": "string(default='Preset 7')",
+    "quickPrompt7": "string(default='')",
+    "quickPrompt8Name": "string(default='Preset 8')",
+    "quickPrompt8": "string(default='')",
+    "quickPrompt9Name": "string(default='Preset 9')",
+    "quickPrompt9": "string(default='')",
+    "quickPrompt0Name": "string(default='Preset 0')",
+    "quickPrompt0": "string(default='')",
 }
 
 config.conf.spec[roleSECTION] = confspec
+
+
+def getQuickPrompt(index):
+    default = QUICK_PROMPT_DEFAULTS.get(index, {"name": f"Preset {index}", "prompt": ""})
+    cfg = config.conf[roleSECTION]
+    name = cfg.get(f"quickPrompt{index}Name", default["name"])
+    prompt = cfg.get(f"quickPrompt{index}", default["prompt"])
+    return name, prompt
+
+
+def setQuickPrompt(index, name, prompt):
+    cfg = config.conf[roleSECTION]
+    cfg[f"quickPrompt{index}Name"] = name
+    cfg[f"quickPrompt{index}"] = prompt
 
 # The list box keeps this many turns of scrollback...
 MAX_CHAT_HISTORY = 50
@@ -51,10 +130,7 @@ SAME_MODEL = "same"
 # Auto only picks one the account actually returned from Fetch Models.
 GROQ_FAST_TRANSLATE = (
     "llama-3.3-70b-versatile",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "moonshotai/kimi-k2-instruct",
     "llama-3.1-8b-instant",
-    "gemma2-9b-it",
 )
 
 # One pooled session for the whole add-on: keeps TLS connections alive between

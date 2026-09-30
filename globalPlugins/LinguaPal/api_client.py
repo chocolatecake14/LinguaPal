@@ -21,14 +21,23 @@ GEMINI_SAFETY = [
     )
 ]
 
-VISION_HINTS = ("llama-4", "-vl", "vl-", "vision", "scout", "maverick", "gemma-3")
-VISION_FALLBACK = "meta-llama/llama-4-scout-17b-16e-instruct"
+VISION_HINTS = ("qwen3.6", "qwen3.8", "qwen3-vl", "-vl", "vl-", "vision", "llama-4", "scout", "maverick", "gemma-3")
+VISION_FALLBACK = "qwen/qwen3.6-27b"
 
 
 def pickVisionModel(current):
     """None if the configured model already handles images, else a fallback."""
     if any(h in current.lower() for h in VISION_HINTS):
         return None
+    cached = config.conf[roleSECTION].get("groqModelCache", "")
+    if cached:
+        available = [m.strip() for m in cached.split(",") if m.strip()]
+        for candidate in ("qwen/qwen3.6-27b", "qwen/qwen3.8-27b"):
+            if candidate in available:
+                return candidate
+        for m in available:
+            if any(h in m.lower() for h in VISION_HINTS):
+                return m
     return VISION_FALLBACK
 
 
@@ -189,8 +198,8 @@ def groqStream(messages, model=None, temperature=0.7, systemPrompt=None, tune=Tr
             if "content must be a string" in low or ("image" in low and "support" in low):
                 raise Exception(_(
                     "The selected Groq model does not support image inputs. Please select a "
-                    "vision-capable model such as meta-llama/llama-4-scout-17b-16e-instruct or "
-                    "qwen/qwen3-vl-32b-instruct in LinguaPal settings, then try again."))
+                    "vision-capable model such as qwen/qwen3.6-27b in LinguaPal settings, "
+                    "then try again."))
             if "requires terms acceptance" in low:
                 raise Exception(_(
                     "This Groq model requires terms acceptance before it can be used. Please "

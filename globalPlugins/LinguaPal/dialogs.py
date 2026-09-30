@@ -416,17 +416,37 @@ class GeminiChatDialog(wx.Dialog):
         self.sendBtn.SetLabel(_("S&top"))
         wx.CallAfter(self.getResponse)
 
-    def injectScreenshot(self, b64, mime, name):
+    def injectMessage(self, message):
+        def doSend():
+            self.inputBox.SetValue(message)
+            self.onSend(None)
+
+        if self._is_generating:
+            self.stopGeneration()
+            wx.CallLater(300, doSend)
+            return
+        doSend()
+
+    def injectScreenshot(self, b64, mime, name, prompt=None):
         self.pending_image_b64 = b64
         self.pending_image_mime = mime
         self.pending_image_name = name
-        self.inputBox.SetValue(_(
-            "Please describe this screenshot in detail for a blind user. "
-            "Include all visible text, UI controls and their states, "
-            "any error messages, and the application name if visible. "
-            "If the image is completely black, blank, or obscured, state only that the screen is black or blank, and do not guess or hallucinate any UI elements."
-        ))
-        self.onSend(None)
+        if not prompt:
+            prompt = _(
+                "Please describe this screenshot in detail for a blind user. "
+                "Include all visible text, UI controls and their states, "
+                "any error messages, and the application name if visible. "
+                "If the image is completely black, blank, or obscured, state only that the screen is black or blank, and do not guess or hallucinate any UI elements."
+            )
+        def doSend():
+            self.inputBox.SetValue(prompt)
+            self.onSend(None)
+
+        if self._is_generating:
+            self.stopGeneration()
+            wx.CallLater(300, doSend)
+            return
+        doSend()
 
     def appendToChat(self, speaker, message):
         clean_message = re.sub(r'\n\s*\n+', '\n', message.strip())
