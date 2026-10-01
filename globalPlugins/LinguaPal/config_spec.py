@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "1.3.0"
+ADDON_VERSION = "1.4.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json"
 roleSECTION = "LinguaPal"
 

@@ -6,22 +6,22 @@ An NVDA add-on for seamless language translation, image description, and convers
 This add-on was previously named **AskGemini** and has been completely overhauled into **LinguaPal**. If you have an older version of AskGemini installed, please remove it before installing LinguaPal to avoid conflicts.
 
 ## Features
-- **Real-time Clipboard Translation:** Translate copied text instantly using your selected AI model.
+- **Smart Translation (Selected Text & Clipboard):** Translate highlighted/selected text instantly, or fall back seamlessly to your clipboard if no text is selected.
 - **Fast Dual-Target Language Swap:** Easily toggle between your Primary and Secondary target languages with a single key (`T`).
 - **Screen & Window Description (AI Vision):** Describe your focused window (`D`) or the entire multi-monitor screen (`W`) with AI vision to identify visible UI controls, text, errors, and contents.
-- **Quick Prompts:** Run customizable AI actions on clipboard text (Summarize, Fix Grammar, Explain Simply, Rewrite Professionally, Explain Code/Error, plus 5 custom slots) and seamlessly continue chatting in the chat dialog.
+- **Quick Prompts:** Run customizable AI actions on selected text or clipboard content (Summarize, Fix Grammar, Explain Simply, Rewrite Professionally, Explain Code/Error, plus 5 custom slots) and seamlessly continue chatting in the chat dialog.
 - **AI Chat Dialog with Image Attachments:** Chat interactively with Gemini or Groq models, attach image files from your computer or paste from the clipboard, and ask follow-up questions.
 
 ## Hotkeys & Command Layer
 To keep your keyboard free from shortcut conflicts with Windows and other add-ons, LinguaPal uses a **Command Layer** by default. Press the layer activation shortcut, release it, and then press a single key:
 
 **NVDA + Shift + L**: Enters the Command Layer. While active, press:
-- **C**: Translate clipboard text to the active target language.
+- **C**: Translate selected text (or clipboard text if nothing is selected) to the active target language.
 - **T**: Swap active translation target language (Primary &harr; Secondary).
 - **G**: Open the LinguaPal AI chat window.
 - **D**: Describe the focused window using AI vision.
 - **W**: Describe the entire full screen (all monitors) using AI vision.
-- **1**: Quick Prompt 1 (Summarize clipboard text).
+- **1**: Quick Prompt 1 (Summarize selected or clipboard text).
 - **2**: Quick Prompt 2 (Fix grammar & phrasing).
 - **3**: Quick Prompt 3 (Explain simply).
 - **4**: Quick Prompt 4 (Rewrite professionally).

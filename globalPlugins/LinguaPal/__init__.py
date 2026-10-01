@@ -11,6 +11,8 @@ import api
 import tones
 import config
 import addonHandler
+import textInfos
+import treeInterceptorHandler
 from scriptHandler import script
 
 addonHandler.initTranslation()
@@ -99,8 +101,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
             self.linguaPalMenu.AppendSeparator()
 
-            item_trans = self.linguaPalMenu.Append(wx.ID_ANY, _("&Translate Clipboard (C)"))
+            item_trans = self.linguaPalMenu.Append(wx.ID_ANY, _("&Translate Selected or Clipboard Text (C)"))
             self._bindMenuItem(item_trans, lambda evt: wx.CallAfter(self.script_translateClipboard, None))
+
+            item_trans_sel = self.linguaPalMenu.Append(wx.ID_ANY, _("Translate &Selected Text"))
+            self._bindMenuItem(item_trans_sel, lambda evt: wx.CallAfter(self.script_translateSelection, None))
 
             item_swap = self.linguaPalMenu.Append(wx.ID_ANY, _("S&wap Translation Language (T)"))
             self._bindMenuItem(item_swap, lambda evt: wx.CallAfter(self.script_swapLanguages, None))
@@ -206,7 +211,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         gesture="kb:NVDA+shift+l",
         description=_(
             "Activates the LinguaPal command layer. "
-            "Then press a single key: C for clipboard, T for target language, "
+            "Then press a single key: C for selected or clipboard text, T for target language, "
             "G for chat, D for describe window, W for full screen, "
             "1 to 9 and 0 for quick prompts, "
             "S for settings, U for updates, N for what's new, H for help, or Escape to cancel."
@@ -231,12 +236,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def script_layerHelp(self, gesture):
         ui.message(_(
             "LinguaPal layer commands: "
-            "C: Translate clipboard. "
+            "C: Translate selected or clipboard text. "
             "T: Swap target language. "
             "G: Chat with AI. "
             "D: Describe focused window. "
             "W: Describe full screen. "
-            "1 to 9, 0: Quick prompts on clipboard text. "
+            "1 to 9, 0: Quick prompts on selected or clipboard text. "
             "S: Settings. "
             "U: Check for updates. "
             "N: What's new. "
@@ -270,20 +275,44 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # This gesture is nearly always followed by a translation.
         prewarmConnection()
 
-    @script(description=_("Translates clipboard text using the currently selected AI model"))
-    def script_translateClipboard(self, gesture):
+    @staticmethod
+    def getSelectedText():
+        candidates = []
         try:
-            clip = api.getClipData()
+            focus = api.getFocusObject()
+            if focus:
+                treeInterceptor = getattr(focus, "treeInterceptor", None)
+                if (
+                    isinstance(treeInterceptor, treeInterceptorHandler.DocumentTreeInterceptor)
+                    and not treeInterceptor.passThrough
+                ):
+                    candidates.append(treeInterceptor)
+                candidates.append(focus)
         except Exception:
-            clip = None
+            pass
 
-        if not clip or not clip.strip():
-            ui.message(_("Clipboard is empty"))
-            return
+        try:
+            caret = api.getCaretObject()
+            if caret and caret not in candidates:
+                candidates.append(caret)
+        except Exception:
+            pass
 
+        for obj in candidates:
+            try:
+                info = obj.makeTextInfo(textInfos.POSITION_SELECTION)
+                if info and not info.isCollapsed:
+                    text = info.text
+                    if text and text.strip():
+                        return text
+            except (RuntimeError, NotImplementedError, AttributeError):
+                continue
+        return None
+
+    def _translateText(self, text):
         provider = config.conf[roleSECTION]["model"]
         model = resolveTranslateModel(provider)
-        cached = cacheGet(cacheKey(provider, model, clip))
+        cached = cacheGet(cacheKey(provider, model, text))
         if cached is not None:
             # Same text, same target, same model: no reason to ask again.
             self._translateGen += 1
@@ -298,9 +327,46 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._translateGen += 1
         threading.Thread(
             target=self._translateWorker,
-            args=(clip, provider, model, self._translateGen),
+            args=(text, provider, model, self._translateGen),
             daemon=True
         ).start()
+
+    @script(
+        description=_(
+            "Translates selected text if present, otherwise translates clipboard text, using the currently selected AI model"
+        )
+    )
+    def script_translateClipboard(self, gesture):
+        selected = self.getSelectedText()
+        if selected:
+            self._translateText(selected)
+            return
+
+        try:
+            clip = api.getClipData()
+        except Exception:
+            clip = None
+
+        if not clip or not clip.strip():
+            tones.beep(300, 100)
+            ui.message(_("No text selected and clipboard is empty"))
+            return
+
+        self._translateText(clip)
+
+    @script(
+        description=_(
+            "Translates selected/highlighted text using the currently selected AI model"
+        )
+    )
+    def script_translateSelection(self, gesture):
+        selected = self.getSelectedText()
+        if not selected:
+            tones.beep(300, 100)
+            ui.message(_("No text selected"))
+            return
+
+        self._translateText(selected)
 
     def _translateWorker(self, text, provider, model, generation):
         def isCurrent():
@@ -431,14 +497,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         threading.Thread(target=worker, daemon=True).start()
 
     def _executeQuickPrompt(self, index):
-        try:
-            clip = api.getClipData()
-        except Exception:
-            clip = None
+        text = self.getSelectedText()
+        if not text:
+            try:
+                text = api.getClipData()
+            except Exception:
+                text = None
 
-        if not clip or not clip.strip():
+        if not text or not text.strip():
             tones.beep(300, 100)
-            ui.message(_("Clipboard is empty"))
+            ui.message(_("No text selected and clipboard is empty"))
             return
 
         name, prompt_instruction = getQuickPrompt(index)
@@ -450,7 +518,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         tones.beep(550, 60)
         ui.message(_("Quick Prompt {index}: {name}").format(index=index, name=name))
 
-        full_message = f"{prompt_instruction.strip()}\n\n{clip.strip()}"
+        full_message = f"{prompt_instruction.strip()}\n\n{text.strip()}"
 
         def openAndInject():
             try:
@@ -465,43 +533,43 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
         wx.CallAfter(openAndInject)
 
-    @script(description=_("Runs Quick Prompt Preset 1 (Summarize) on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 1 (Summarize) on selected or clipboard text and opens chat"))
     def script_quickPrompt1(self, gesture):
         self._executeQuickPrompt(1)
 
-    @script(description=_("Runs Quick Prompt Preset 2 (Fix Grammar) on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 2 (Fix Grammar) on selected or clipboard text and opens chat"))
     def script_quickPrompt2(self, gesture):
         self._executeQuickPrompt(2)
 
-    @script(description=_("Runs Quick Prompt Preset 3 (Explain Simply) on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 3 (Explain Simply) on selected or clipboard text and opens chat"))
     def script_quickPrompt3(self, gesture):
         self._executeQuickPrompt(3)
 
-    @script(description=_("Runs Quick Prompt Preset 4 (Rewrite Professionally) on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 4 (Rewrite Professionally) on selected or clipboard text and opens chat"))
     def script_quickPrompt4(self, gesture):
         self._executeQuickPrompt(4)
 
-    @script(description=_("Runs Quick Prompt Preset 5 (Explain Code/Error) on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 5 (Explain Code/Error) on selected or clipboard text and opens chat"))
     def script_quickPrompt5(self, gesture):
         self._executeQuickPrompt(5)
 
-    @script(description=_("Runs Quick Prompt Preset 6 on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 6 on selected or clipboard text and opens chat"))
     def script_quickPrompt6(self, gesture):
         self._executeQuickPrompt(6)
 
-    @script(description=_("Runs Quick Prompt Preset 7 on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 7 on selected or clipboard text and opens chat"))
     def script_quickPrompt7(self, gesture):
         self._executeQuickPrompt(7)
 
-    @script(description=_("Runs Quick Prompt Preset 8 on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 8 on selected or clipboard text and opens chat"))
     def script_quickPrompt8(self, gesture):
         self._executeQuickPrompt(8)
 
-    @script(description=_("Runs Quick Prompt Preset 9 on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 9 on selected or clipboard text and opens chat"))
     def script_quickPrompt9(self, gesture):
         self._executeQuickPrompt(9)
 
-    @script(description=_("Runs Quick Prompt Preset 0 on clipboard text and opens chat"))
+    @script(description=_("Runs Quick Prompt Preset 0 on selected or clipboard text and opens chat"))
     def script_quickPrompt0(self, gesture):
         self._executeQuickPrompt(0)
 

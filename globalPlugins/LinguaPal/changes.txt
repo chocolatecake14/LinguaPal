@@ -1,3 +1,15 @@
+#Version 1.4.0:
+What's new:
+* Smart Selected/Highlighted Text Translation:
+  - LinguaPal now intelligently detects whether text is currently selected or highlighted in any application, document, edit control, or web browser.
+  - When triggering translation via Command Layer key C (or your custom translation hotkey), LinguaPal automatically translates the selected text directly—no need to copy it to clipboard first!
+  - If no text is currently selected, it smoothly falls back to translating your clipboard content as usual.
+  - Added a dedicated "Translate Selected Text" action accessible via the NVDA Tools > LinguaPal menu and assignable to any custom hotkey in NVDA Menu > Preferences > Input Gestures > LinguaPal.
+* Quick Prompts Support for Highlighted Text:
+  - Quick Prompts (Command Layer keys 1-9, and 0) now prioritize currently highlighted/selected text!
+  - Simply highlight any text, sentence, article, or code snippet and press NVDA+Shift+L followed by a quick prompt key (e.g. 1 for Summarize, 2 for Grammar Fix, 3 for Explain Simply, 4 for Rewrite Professionally, 5 for Code Explanation).
+  - Automatically falls back to clipboard text if nothing is highlighted.
+
 #Version 1.3.0:
 What's new:
 * Dedicated Command Layer:
