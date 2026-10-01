@@ -14,7 +14,7 @@ What's new:
     - N: View What's New.
     - H: Hear the list of available commands.
     - Escape: Cancel and close the layer.
-  - Automatically times out after 5 seconds of inactivity with audio feedback.
+  - Automatically times out after 5 seconds of inactivity.
 * Quick Prompts (Keys 1-9, 0):
   - Run fast, customizable AI actions directly on your clipboard text:
     - 1: Summarize into clear key bullet points.
@@ -28,11 +28,7 @@ What's new:
   - Individual presets can also be bound to dedicated global hotkeys in NVDA Menu > Preferences > Input Gestures > LinguaPal.
 * Full Screen Vision:
   - Added Full Screen Vision (key W in command layer) to capture the entire desktop across all displays, perfect for multi-window context or floating tooltips.
-* Clean Global Hotkey Footprint:
-  - Global default hotkeys (NVDA+Alt+C, NVDA+Alt+G, NVDA+Alt+D, NVDA+Alt+T, NVDA+Alt+S) have been freed up, completely preventing shortcut conflicts with Windows and other NVDA add-ons.
   - Users who prefer direct shortcuts can still easily bind their own hotkeys in NVDA Menu > Preferences > Input Gestures > LinguaPal.
-* Enhanced NVDA Tools Menu:
-  - Updated the LinguaPal submenu with Command Layer accelerator and handy key reminders for all actions.
 
 #Version 1.2.0:
 What's new:
