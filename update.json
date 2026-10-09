@@ -1,5 +1,5 @@
 {
   "version": "1.5.0",
-  "changelog": "#Version 1.5.0:\nWhat's new:\n* Configurable Translation Caching:\n  - Added a new "Cache translations" setting in LinguaPal Settings (disabled by default).\n  - When disabled (default), LinguaPal queries the AI model anew each time you translate, making it easy to re-translate text if a previous response was inaccurate or incomplete.\n  - If you prefer immediate cached results for repeated text, you can re-enable translation caching at any time in settings.",
+  "changelog": "#Version 1.5.0:\nWhat's new:\n* Configurable Translation Caching:\n  - Added a new \"Cache translations\" setting in LinguaPal Settings (disabled by default).\n  - When disabled (default), LinguaPal queries the AI model anew each time you translate, making it easy to re-translate text if a previous response was inaccurate or incomplete.\n  - If you prefer immediate cached results for repeated text, you can re-enable translation caching at any time in settings.",
   "downloadUrl": "https://github.com/chocolatecake14/LinguaPal/releases/download/1.5.0/LinguaPal-1.5.0.nvda-addon"
 }
