@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 addonHandler.initTranslation()
 
-ADDON_VERSION = "1.4.0"
+ADDON_VERSION = "1.5.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/chocolatecake14/LinguaPal/refs/heads/main/update.json"
 roleSECTION = "LinguaPal"
 
@@ -76,6 +76,7 @@ confspec = {
     "systemPrompt": "string(default=You are a helpful AI assistant.)",
     "checkUpdatesAtStartup": "boolean(default=True)",
     "copyTranslationToClipboard": "boolean(default=True)",
+    "cacheTranslations": "boolean(default=False)",
     "geminiModelCache": "string(default=)",
     "groqModelCache": "string(default=)",
     "quickPrompt1Name": "string(default=Summarize)",
@@ -309,6 +310,8 @@ def cacheKey(provider, model, text):
 
 
 def cacheGet(key):
+    if not config.conf[roleSECTION].get("cacheTranslations", False):
+        return None
     result = _transCache.get(key)
     if result is not None:
         _transCache.move_to_end(key)
@@ -316,6 +319,8 @@ def cacheGet(key):
 
 
 def cachePut(key, value):
+    if not config.conf[roleSECTION].get("cacheTranslations", False):
+        return
     if len(key[3]) > TRANS_CACHE_MAX_CHARS:
         return
     _transCache[key] = value

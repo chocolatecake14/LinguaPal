@@ -217,6 +217,11 @@ class LinguaPalSettingsPanel(SettingsPanel):
         ))
         self.copyClipCheckBox.SetValue(config.conf[roleSECTION].get("copyTranslationToClipboard", True))
 
+        self.cacheTranslationsCheckBox = sHelper.addItem(wx.CheckBox(
+            self, label=_("Cache &translations")
+        ))
+        self.cacheTranslationsCheckBox.SetValue(config.conf[roleSECTION].get("cacheTranslations", False))
+
         # --- Quick Prompts Settings ---
         self.quickPromptsSectionLabel = sHelper.addItem(wx.StaticText(self, label=_("--- Quick Prompts (Command Layer Keys 1-9, 0) ---")))
 
@@ -461,6 +466,7 @@ class LinguaPalSettingsPanel(SettingsPanel):
         config.conf[roleSECTION]["translateTo"] = self.langChoice.GetStringSelection()
         config.conf[roleSECTION]["secondaryTranslateTo"] = self.secondaryLangChoice.GetStringSelection()
         config.conf[roleSECTION]["copyTranslationToClipboard"] = self.copyClipCheckBox.GetValue()
+        config.conf[roleSECTION]["cacheTranslations"] = self.cacheTranslationsCheckBox.GetValue()
         config.conf[roleSECTION]["checkUpdatesAtStartup"] = self.updateCheckBox.GetValue()
         cacheClear()
         prewarmConnection()

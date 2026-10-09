@@ -312,15 +312,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _translateText(self, text):
         provider = config.conf[roleSECTION]["model"]
         model = resolveTranslateModel(provider)
-        cached = cacheGet(cacheKey(provider, model, text))
-        if cached is not None:
-            # Same text, same target, same model: no reason to ask again.
-            self._translateGen += 1
-            if config.conf[roleSECTION].get("copyTranslationToClipboard", True):
-                api.copyToClip(cached)
-            ui.message(cached)
-            wx.CallAfter(tones.beep, 880, 30)
-            return
+        if config.conf[roleSECTION].get("cacheTranslations", False):
+            cached = cacheGet(cacheKey(provider, model, text))
+            if cached is not None:
+                # Same text, same target, same model: no reason to ask again.
+                self._translateGen += 1
+                if config.conf[roleSECTION].get("copyTranslationToClipboard", True):
+                    api.copyToClip(cached)
+                ui.message(cached)
+                wx.CallAfter(tones.beep, 880, 30)
+                return
 
         # Beep on the main thread so it never delays the request itself.
         tones.beep(660, 40)
@@ -393,7 +394,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if not isCurrent():
                 return
             if result:
-                cachePut(cacheKey(provider, model, text), result)
+                if config.conf[roleSECTION].get("cacheTranslations", False):
+                    cachePut(cacheKey(provider, model, text), result)
                 if config.conf[roleSECTION].get("copyTranslationToClipboard", True):
                     wx.CallAfter(api.copyToClip, result)
                 tones.beep(880, 30)
